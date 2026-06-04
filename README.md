@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Polla Mundialista · celya — Mundial 2026
 
-## Getting Started
+Plataforma de polla (quiniela) deportiva para celya: pronósticos del Mundial 2026,
+trivia de negocio antes de cada partido, ranking, premios y panel de administración.
 
-First, run the development server:
+## Stack
+- **Next.js 16** (App Router, Server Actions) + **TypeScript** + **React 19**
+- **Tailwind CSS v4** (sistema de diseño celya: claro/oscuro, Poppins)
+- **PostgreSQL** + **Prisma 6** (driver adapter `pg`, motor de consultas WASM)
+- Autenticación propia por cookie JWT firmada (`jose` + `bcryptjs`)
+
+## Roles
+- **SUPER_ADMIN**: todo + configuración de puntaje.
+- **ADMIN**: usuarios, partidos, preguntas, premios, resultados, tabla.
+- **EMPLEADO**: pronósticos, trivia, campeón/subcampeón, sus puntos, tabla, premios.
+
+## Funcionalidades
+- Login, auto-registro (dominio `@celya.co`, aprobación del admin) y recuperación de contraseña.
+- Gestión de usuarios, partidos (con carga de resultados), preguntas de trivia (104, se bloquean al ser respondidas) y premios.
+- Pronóstico de marcadores con **gate de trivia** y deadline de 1 hora antes del partido.
+- Selección de campeón/subcampeón (bloqueada al iniciar octavos).
+- Cálculo automático de puntos: marcador exacto, resultado, trivia, campeón y subcampeón (configurable).
+- Tabla de posiciones y detalle de puntos.
+
+## Desarrollo local
+
+No requiere Docker: se usa **PGlite** (Postgres en WASM) expuesto por TCP.
 
 ```bash
+npm install
+cp .env.example .env            # ajusta AUTH_SECRET, etc. (los valores por defecto sirven para local)
+
+# 1) Levanta la base de datos local (deja esta terminal abierta)
+node scripts/dev-db.mjs
+
+# 2) En otra terminal: sincroniza esquema y carga datos del Mundial 2026
+npm run db:push
+npm run db:seed
+
+# 3) Inicia la app
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App en http://localhost:3000 · Admin inicial: `admin@celya.co` / `Celya2026*` (ver `.env`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Despliegue en Railway
+1. Crea un proyecto en Railway y añade el plugin **PostgreSQL** (define `DATABASE_URL`).
+2. Conecta este repositorio como servicio web.
+3. Define las variables de entorno (ver `.env.example`): `AUTH_SECRET`, `APP_URL`,
+   `ALLOWED_EMAIL_DOMAIN`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, y opcionalmente `RESEND_API_KEY`/`EMAIL_FROM`.
+4. El build corre `prisma generate && next build`; el arranque corre `prisma migrate deploy && next start`
+   (aplica las migraciones de `prisma/migrations`).
+5. Tras el primer despliegue, ejecuta el seed una vez (Railway → comando puntual):
+   `npm run db:seed`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Variables de entorno
+Ver [`.env.example`](.env.example). En desarrollo, si no defines `RESEND_API_KEY`, los
+correos de recuperación se imprimen en consola con el enlace de reseteo.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts útiles
+- `npm run dev` — servidor de desarrollo
+- `npm run db:push` — sincroniza el esquema (desarrollo)
+- `npm run db:seed` — carga equipos, 104 partidos, trivias, premios y superadmin
+- `npm run db:deploy` — aplica migraciones (producción)
+- `npm run db:reset` — resetea la base de datos local
