@@ -1,0 +1,96 @@
+1. Vibe general
+Dashboard SaaS limpio y minimalista, casi monocromático (negro/blanco/grises) con un solo color de acento fuerte: amarillo. Mucho aire en blanco, esquinas redondeadas, bordes sutiles y sombras muy suaves (estética plana, no "material" pesado). El amarillo se usa con moderación: solo para la acción primaria, estados activos y detalles. Verde‑azulado (teal) y rojo se reservan para semántica de estado. Soporta modo claro y oscuro.
+
+2. Paleta de color
+Marca (fija, no alterar):
+
+Rol	Hex
+Negro	#000213
+Amarillo (acento principal)	#FFCD00
+Blanco	#FFFFFF
+Naranja (acento secundario)	#FF970B
+Teal	#005C60
+Carbón (charcoal)	#232F33
+Cian claro	#EBF7F7
+Tokens semánticos — modo claro:
+
+Fondo app #F7F7F8 · Texto #0A0B10
+Tarjeta (card) #FFFFFF · Borde #F0F1F4 · Input border #E6E8EC
+Muted (fondos suaves) #F1F2F4 · Texto muted #6B7280
+Primario = negro #000213 (texto blanco encima)
+Acento = amarillo #FFCD00 (texto negro encima)
+Focus ring = amarillo #FFCD00
+Tokens semánticos — modo oscuro:
+
+Fondo #0A0B10 · Texto #F4F4F5
+Card #14161D · Borde #1F2230
+Muted #1A1D26 · Texto muted #9BA1AB
+Primario se invierte a amarillo #FFCD00 (texto negro)
+Verde de éxito se aclara a #2DD4BF
+Colores de estado (semánticos):
+
+On‑track / hecho / completado → teal #005C60 (en oscuro #2DD4BF)
+En riesgo / advertencia → amarillo #FFCD00
+Off‑track / vencido / bloqueado / error → rojo #DC2626
+Inactivo / sin iniciar → gris #9CA3AF
+3. Tipografía
+Sans: Poppins (geométrica, amigable) para todo el UI.
+Mono: Geist Mono para códigos/hex.
+Pesos: 400 normal, 500 medium, 600 semibold (títulos y números clave).
+Escala típica: título de página ~30px/semibold; H2 sección 14–16px/semibold; cuerpo 14px; metadatos 12px; micro‑labels 11px.
+Micro‑labels de columnas/campos: 11px, MAYÚSCULAS, letter-spacing amplio, color muted, semibold.
+Números (%, montos, conteos) con cifras tabulares (tabular-nums) para que alineen.
+4. Forma, espacio, profundidad
+Radio: base ~10px (0.625rem); tarjetas rounded-xl (~12px); botones/inputs ~8–10px; chips/badges/dots = círculo completo (pill).
+Espaciado: múltiplos de 4px. Padding de tarjeta 20–24px; celdas de tabla 16px×12px; gaps 8–16px.
+Bordes: 1px, color borde (casi imperceptible en claro). Casi todo separa por borde, no por sombra.
+Sombras: muy suaves y escalonadas (xs→xl). Ej. card en hover: 0 1px 3px rgba(0,0,0,.06). Nada dramático.
+Movimiento: transiciones 150ms, easing cubic-bezier(0.4,0,0.2,1). Hover sutil (cambio de fondo/opacidad), sin animaciones llamativas.
+Selección de texto: fondo amarillo, texto negro. Controles de formulario (checkbox/radio/range) con accent amarillo. Scrollbars finas.
+5. Componentes (recetas)
+Botón primario: fondo amarillo, texto negro, alto 36–40px, padding‑x 16px, 14px semibold, radio ~10px, ícono opcional a la izquierda; hover = opacidad 90%.
+Botón secundario/ghost: fondo card, borde 1px, texto normal; hover = fondo muted.
+Botón‑ícono: ~28px, sin fondo, ícono muted; hover = fondo muted + ícono foreground.
+
+Tarjeta: fondo card, borde 1px, rounded-xl, padding 20–24px. Es el contenedor base de todo.
+
+Page header: título grande semibold (+ emoji opcional), subtítulo 14px muted debajo, acciones a la derecha. (No usar "eyebrow"/antetítulo salvo que el diseño lo defina.)
+
+Tabs / filtros tipo pill: grupo en contenedor con borde y padding 2px; cada pill alto 28–32px; activo = fondo amarillo + texto negro, inactivo = texto muted. Botón "Todas/Todos" como reset.
+
+Badge de estado (pill): rounded-full, padding 8px×2px, 12px medium, tinte translúcido + texto del mismo color:
+
+gris: fondo muted, texto muted → sin iniciar / borrador
+amarillo: fondo amarillo 20%, texto carbón → en curso / enviado
+rojo: fondo rojo 15%, texto rojo → retrasado / vencido / bloqueado
+teal: fondo teal 15%, texto teal → completado / hecho
+Punto de estado (dot): círculo 8px relleno del color semántico, suele preceder a un label.
+
+Tabla: header con fondo muted al 40%, micro‑labels en mayúscula; filas separadas por borde superior, hover fondo muted 30%; celdas 16×12px; en pantallas angostas, scroll horizontal con ancho mínimo (no romper a tarjetas salvo módulos específicos).
+
+Barra de progreso: track fino (6px) rounded-full fondo muted, relleno amarillo; a la derecha el % en cifras tabulares.
+
+Avatar: círculo pequeño (24–28px), fondo negro, iniciales en amarillo, bold.
+
+Inputs: alto 36px, borde 1px (input border), radio ~8px, fondo card/background; foco = ring amarillo 2px. Placeholders en muted.
+
+Modal: tarjeta centrada con backdrop; header (título + subtítulo), cuerpo, footer con Cancelar (ghost) + acción primaria (amarilla); cierra con Esc; atrapa el foco.
+
+Toast: flotante arriba‑centro, rounded-lg con sombra; éxito = verde, error = rojo; auto‑cierre.
+
+Empty state: mensaje corto centrado en muted, padding generoso.
+
+Stat/KPI cards (dashboard): número grande (30px semibold) + label + sub‑label; la tarjeta destacada lleva borde izquierdo grueso (4px) amarillo, las demás solo borde normal; ícono pequeño arriba con color semántico.
+
+Gráficas (líneas): SVG; objetivo = línea punteada gris, real = línea sólida amarilla; puntos en cada dato; tooltip al hover; líneas de grid horizontales muy tenues; etiquetas de ejes 11px muted. Curvas suavizadas.
+
+Sidebar: fija a la izquierda, navegación agrupada por secciones (cada grupo con su micro‑label); item = ícono + texto; activo = fondo amarillo translúcido (~15%) + texto/ícono amarillo; colapsable.
+
+Top bar: alto 56px, fondo card, borde inferior; buscador global (atajo Cmd/Ctrl+K), campana de notificaciones con badge rojo de conteo, toggle de tema (sol/luna), menú de usuario con avatar.
+
+6. Reglas de uso del acento
+El amarillo es escaso y deliberado: acción primaria, estado activo (tabs/sidebar), barras de progreso, bordes de acento. No pintar áreas grandes de amarillo.
+Estados siempre con su color semántico (teal/amarillo/rojo/gris), nunca inventar colores por estado.
+Jerarquía por peso tipográfico y color de texto (foreground vs muted), no por muchos colores.
+En oscuro, el primario pasa a amarillo; mantener contrastes (texto negro sobre amarillo).
+Íconos: set de líneas uniforme (estilo lucide/feather), tamaño 14–18px, color muted por defecto.

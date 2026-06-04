@@ -1,0 +1,220 @@
+// Polla Mundialista — celya · Mundial 2026
+// Prisma schema (PostgreSQL)
+
+generator client {
+  provider        = "prisma-client-js"
+  engineType      = "client"
+  previewFeatures = ["driverAdapters", "queryCompiler"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  EMPLEADO
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
+enum Phase {
+  GROUP
+  R32
+  R16
+  QF
+  SF
+  THIRD
+  FINAL
+}
+
+enum MatchStatus {
+  SCHEDULED
+  LIVE
+  FINISHED
+}
+
+enum CommonStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PointsType {
+  EXACT
+  RESULT
+  TRIVIA
+  CHAMPION
+  RUNNERUP
+}
+
+model User {
+  id           Int        @id @default(autoincrement())
+  fullName     String
+  email        String     @unique
+  documento    String?
+  passwordHash String
+  role         Role       @default(EMPLEADO)
+  status       UserStatus @default(PENDING)
+  avatarUrl    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  predictions  Prediction[]
+  answers      QuestionAnswer[]
+  championPick ChampionPick?
+  pointsLog    PointsEntry[]
+  resetTokens  PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model Team {
+  id        Int      @id @default(autoincrement())
+  name      String
+  fifaCode  String   @unique
+  flagEmoji String
+  groupName String? // A..L (null for placeholder knockout slots)
+  createdAt DateTime @default(now())
+
+  homeMatches    Match[]        @relation("HomeTeam")
+  awayMatches    Match[]        @relation("AwayTeam")
+  championPicks  ChampionPick[] @relation("Champion")
+  runnerUpPicks  ChampionPick[] @relation("RunnerUp")
+}
+
+model Match {
+  id         Int         @id @default(autoincrement())
+  phase      Phase
+  groupName  String? // A..L for GROUP phase
+  label      String? // e.g. "Octavos 1", used for knockout slots
+  homeTeamId Int?
+  awayTeamId Int?
+  homeTeam   Team?       @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam   Team?       @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  kickoffAt  DateTime
+  venue      String?
+  status     MatchStatus @default(SCHEDULED)
+  homeScore  Int?
+  awayScore  Int?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  question    Question?
+  predictions Prediction[]
+  pointsLog   PointsEntry[]
+
+  @@index([phase])
+  @@index([kickoffAt])
+}
+
+model Question {
+  id            Int          @id @default(autoincrement())
+  matchId       Int          @unique
+  match         Match        @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  text          String
+  options       String[] // 4 options
+  correctOption Int          @default(0)
+  status        CommonStatus @default(ACTIVE)
+  lockedAt      DateTime? // set when first answered -> admin cannot edit/delete
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  answers QuestionAnswer[]
+}
+
+model QuestionAnswer {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  questionId     Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question       Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOption Int
+  isCorrect      Boolean
+  answeredAt     DateTime @default(now())
+
+  @@unique([userId, questionId])
+  @@index([questionId])
+}
+
+model Prediction {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  matchId       Int
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match         Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  homeScore     Int
+  awayScore     Int
+  pointsAwarded Int? // null until match scored
+  scoredAt      DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([userId, matchId])
+  @@index([matchId])
+}
+
+model ChampionPick {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  championTeamId  Int
+  runnerUpTeamId  Int
+  championTeam    Team     @relation("Champion", fields: [championTeamId], references: [id])
+  runnerUpTeam    Team     @relation("RunnerUp", fields: [runnerUpTeamId], references: [id])
+  championPts     Int?
+  runnerUpPts     Int?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+model Prize {
+  id          Int          @id @default(autoincrement())
+  position    Int?
+  name        String
+  description String?
+  imageUrl    String?
+  status      CommonStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model PointsEntry {
+  id        Int        @id @default(autoincrement())
+  userId    Int
+  matchId   Int?
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match     Match?     @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  type      PointsType
+  points    Int
+  createdAt DateTime   @default(now())
+
+  @@index([userId])
+}
+
+model ScoringConfig {
+  id                Int    @id @default(1)
+  exactPts          Int    @default(5)
+  resultPts         Int    @default(3)
+  triviaPts         Int    @default(1)
+  championPts       Int    @default(10)
+  runnerUpPts       Int    @default(5)
+  lockMinutes       Int    @default(60)
+  championLockPhase Phase  @default(R16)
+  updatedAt         DateTime @updatedAt
+}

@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+/* Class-based dark mode (toggled by next-themes) */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ---------- Semantic tokens · LIGHT ---------- */
+:root {
+  --background: #f7f7f8;
+  --foreground: #0a0b10;
+  --card: #ffffff;
+  --card-foreground: #0a0b10;
+  --border: #f0f1f4;
+  --input: #e6e8ec;
+  --muted: #f1f2f4;
+  --muted-foreground: #6b7280;
+  --primary: #000213;
+  --primary-foreground: #ffffff;
+  --accent: #ffcd00;
+  --accent-foreground: #000213;
+  --ring: #ffcd00;
+  --success: #005c60;
+  --success-foreground: #ffffff;
+  --warning: #ffcd00;
+  --warning-foreground: #232f33;
+  --danger: #dc2626;
+  --danger-foreground: #ffffff;
+  --neutral: #9ca3af;
+}
+
+/* ---------- Semantic tokens · DARK ---------- */
+.dark {
+  --background: #0a0b10;
+  --foreground: #f4f4f5;
+  --card: #14161d;
+  --card-foreground: #f4f4f5;
+  --border: #1f2230;
+  --input: #1f2230;
+  --muted: #1a1d26;
+  --muted-foreground: #9ba1ab;
+  --primary: #ffcd00;
+  --primary-foreground: #000213;
+  --accent: #ffcd00;
+  --accent-foreground: #000213;
+  --ring: #ffcd00;
+  --success: #2dd4bf;
+  --success-foreground: #04201d;
+  --warning: #ffcd00;
+  --warning-foreground: #232f33;
+  --danger: #ef4444;
+  --danger-foreground: #ffffff;
+  --neutral: #9ba1ab;
+}
+
+/* ---------- Expose tokens as Tailwind utilities ---------- */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-neutral: var(--neutral);
+
+  /* Brand (fixed, never altered) */
+  --color-brand-black: #000213;
+  --color-brand-yellow: #ffcd00;
+  --color-brand-orange: #ff970b;
+  --color-brand-teal: #005c60;
+  --color-brand-charcoal: #232f33;
+  --color-brand-cyan: #ebf7f7;
+
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-xl: 0.75rem;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+  }
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"],
+  progress {
+    accent-color: var(--accent);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--muted-foreground) transparent;
+  }
+}
+
+/* Tabular figures helper for numbers/scores */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Festive gradient used in the player area */
+.festive-bg {
+  background:
+    radial-gradient(1200px 500px at 50% -10%, rgba(255, 205, 0, 0.12), transparent 60%),
+    linear-gradient(180deg, #1b1140 0%, #2a1a5e 45%, #0c0a1f 100%);
+}
