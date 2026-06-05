@@ -43,6 +43,15 @@ npm run dev
 
 App en http://localhost:3000 · Admin inicial: `admin@celya.co` / `Celya2026*` (ver `.env`).
 
+## Sincronización de partidos (football-data.org)
+Los 104 partidos son fijos: el admin **no** crea, edita ni elimina partidos. Los equipos de
+las eliminatorias y los marcadores se traen automáticamente de [football-data.org](https://www.football-data.org):
+- Define `FOOTBALL_DATA_TOKEN` (token gratuito). Sin token, la sincronización se desactiva y
+  queda disponible la carga **manual** de resultados como respaldo.
+- Botón **"Sincronizar resultados"** en `/admin/partidos`, o endpoint `GET/POST /api/sync`
+  (protegido con `CRON_SECRET`) para un **cron** de Railway que actualice en vivo.
+- Al sincronizar/cargar un resultado finalizado, los puntos se recalculan automáticamente.
+
 ## Despliegue en Railway
 1. Crea un proyecto en Railway y añade el plugin **PostgreSQL** (define `DATABASE_URL`).
 2. Conecta este repositorio como servicio web.

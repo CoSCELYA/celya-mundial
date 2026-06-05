@@ -10,13 +10,14 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormMessage } from "@/components/form-message";
+import { Flag } from "@/components/flag";
 
 export type ResultMatch = {
   id: number;
   homeName: string;
   awayName: string;
-  homeFlag: string;
-  awayFlag: string;
+  homeCode: string | null;
+  awayCode: string | null;
   homeScore: number | null;
   awayScore: number | null;
   status: MatchStatus;
@@ -69,8 +70,9 @@ export function ResultDialog({
               </Button>
             </div>
 
-            <p className="mb-4 text-sm text-muted-foreground">
-              {match.homeFlag} {match.homeName} vs {match.awayName} {match.awayFlag}
+            <p className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Flag code={match.homeCode} size={16} /> {match.homeName} vs {match.awayName}{" "}
+              <Flag code={match.awayCode} size={16} />
             </p>
 
             <form action={formAction} className="space-y-4">

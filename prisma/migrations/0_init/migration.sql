@@ -62,6 +62,7 @@ CREATE TABLE "Team" (
 -- CreateTable
 CREATE TABLE "Match" (
     "id" SERIAL NOT NULL,
+    "externalId" INTEGER,
     "phase" "Phase" NOT NULL,
     "groupName" TEXT,
     "label" TEXT,
@@ -186,6 +187,9 @@ CREATE INDEX "PasswordResetToken_userId_idx" ON "PasswordResetToken"("userId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Team_fifaCode_key" ON "Team"("fifaCode");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Match_externalId_key" ON "Match"("externalId");
 
 -- CreateIndex
 CREATE INDEX "Match_phase_idx" ON "Match"("phase");

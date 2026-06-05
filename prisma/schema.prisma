@@ -100,6 +100,7 @@ model Team {
 
 model Match {
   id         Int         @id @default(autoincrement())
+  externalId Int?        @unique // football-data.org match id (para sincronización)
   phase      Phase
   groupName  String? // A..L for GROUP phase
   label      String? // e.g. "Octavos 1", used for knockout slots

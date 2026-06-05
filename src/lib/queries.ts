@@ -9,8 +9,8 @@ export type StandingRow = {
   email: string;
   totalPoints: number;
   exactCount: number;
-  champion: { name: string; flagEmoji: string } | null;
-  runnerUp: { name: string; flagEmoji: string } | null;
+  champion: { name: string; flagEmoji: string; fifaCode: string } | null;
+  runnerUp: { name: string; flagEmoji: string; fifaCode: string } | null;
 };
 
 /** Full ranking of EMPLEADO users by accumulated points (with tiebreakers). */
@@ -35,10 +35,18 @@ export async function getStandings(): Promise<StandingRow[]> {
       totalPoints,
       exactCount,
       champion: u.championPick
-        ? { name: u.championPick.championTeam.name, flagEmoji: u.championPick.championTeam.flagEmoji }
+        ? {
+            name: u.championPick.championTeam.name,
+            flagEmoji: u.championPick.championTeam.flagEmoji,
+            fifaCode: u.championPick.championTeam.fifaCode,
+          }
         : null,
       runnerUp: u.championPick
-        ? { name: u.championPick.runnerUpTeam.name, flagEmoji: u.championPick.runnerUpTeam.flagEmoji }
+        ? {
+            name: u.championPick.runnerUpTeam.name,
+            flagEmoji: u.championPick.runnerUpTeam.flagEmoji,
+            fifaCode: u.championPick.runnerUpTeam.fifaCode,
+          }
         : null,
     };
   });

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { getUserSummary, getChampionPick, getScoringConfig } from "@/lib/queries";
 import { isPredictionOpen, formatDateTime } from "@/lib/dates";
 import { PHASE_LABEL } from "@/lib/constants";
+import { Flag } from "@/components/flag";
 
 export default async function PlayerHomePage() {
   const s = await requireSession();
@@ -84,14 +85,14 @@ export default async function PlayerHomePage() {
           {championPick ? (
             <div className="mt-3 space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-2xl">{championPick.championTeam.flagEmoji}</span>
+                <Flag code={championPick.championTeam.fifaCode} size={22} />
                 <div>
                   <div className="text-[11px] uppercase tracking-wide text-white/50">Campeón</div>
                   <div className="text-sm font-semibold">{championPick.championTeam.name}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-2xl">{championPick.runnerUpTeam.flagEmoji}</span>
+                <Flag code={championPick.runnerUpTeam.fifaCode} size={22} />
                 <div>
                   <div className="text-[11px] uppercase tracking-wide text-white/50">Subcampeón</div>
                   <div className="text-sm font-semibold">{championPick.runnerUpTeam.name}</div>
@@ -147,13 +148,13 @@ export default async function PlayerHomePage() {
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2 text-sm font-semibold">
-                      <span className="text-xl">{m.homeTeam?.flagEmoji ?? "🏳️"}</span>
+                      {m.homeTeam && <Flag code={m.homeTeam.fifaCode} size={20} />}
                       {m.homeTeam?.name ?? "Por definir"}
                     </span>
                     <span className="text-xs font-medium text-white/50">vs</span>
                     <span className="flex items-center justify-end gap-2 text-right text-sm font-semibold">
                       {m.awayTeam?.name ?? "Por definir"}
-                      <span className="text-xl">{m.awayTeam?.flagEmoji ?? "🏳️"}</span>
+                      {m.awayTeam && <Flag code={m.awayTeam.fifaCode} size={20} />}
                     </span>
                   </div>
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-accent">

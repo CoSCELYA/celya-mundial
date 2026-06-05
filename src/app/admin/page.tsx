@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/queries";
 import { formatDateTime } from "@/lib/dates";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Flag } from "@/components/flag";
 import { cn } from "@/lib/cn";
 
 type Stat = {
@@ -25,16 +26,14 @@ function StatCard({ label, value, highlight }: Stat) {
 function TeamLabel({
   team,
 }: {
-  team: { name: string; flagEmoji: string } | null;
+  team: { name: string; fifaCode: string } | null;
 }) {
   if (!team) {
     return <span className="text-muted-foreground">Por definir</span>;
   }
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span aria-hidden className="text-base leading-none">
-        {team.flagEmoji}
-      </span>
+      <Flag code={team.fifaCode} size={20} />
       <span>{team.name}</span>
     </span>
   );

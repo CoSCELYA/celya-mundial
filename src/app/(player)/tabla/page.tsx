@@ -1,4 +1,5 @@
 import { Trophy, Medal } from "lucide-react";
+import { Flag } from "@/components/flag";
 import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { getStandings, type StandingRow } from "@/lib/queries";
@@ -126,27 +127,27 @@ function StandingItem({
           </p>
           {/* Campeones en móvil */}
           <p className="mt-0.5 flex items-center gap-2 text-xs text-white/50 md:hidden">
-            <span>{row.champion ? row.champion.flagEmoji : "—"}</span>
+            <span>{row.champion ? <Flag code={row.champion.fifaCode} size={18} /> : "—"}</span>
             <span className="text-white/30">/</span>
-            <span>{row.runnerUp ? row.runnerUp.flagEmoji : "—"}</span>
+            <span>{row.runnerUp ? <Flag code={row.runnerUp.fifaCode} size={18} /> : "—"}</span>
           </p>
         </div>
       </div>
 
       {/* Campeón (md+) */}
       <div
-        className="hidden text-center text-xl md:block"
+        className="hidden text-center md:flex md:items-center md:justify-center"
         title={row.champion?.name ?? "Sin selección"}
       >
-        {row.champion ? row.champion.flagEmoji : <span className="text-white/30">—</span>}
+        {row.champion ? <Flag code={row.champion.fifaCode} size={22} /> : <span className="text-white/30">—</span>}
       </div>
 
       {/* Subcampeón (md+) */}
       <div
-        className="hidden text-center text-xl md:block"
+        className="hidden text-center md:flex md:items-center md:justify-center"
         title={row.runnerUp?.name ?? "Sin selección"}
       >
-        {row.runnerUp ? row.runnerUp.flagEmoji : <span className="text-white/30">—</span>}
+        {row.runnerUp ? <Flag code={row.runnerUp.fifaCode} size={22} /> : <span className="text-white/30">—</span>}
       </div>
 
       {/* Puntos */}

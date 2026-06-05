@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getChampionPick } from "@/lib/queries";
 import { isChampionPickOpen } from "@/lib/scoring";
 import { Trophy, Medal, Lock } from "lucide-react";
+import { Flag } from "@/components/flag";
 import { ChampionForm } from "./_components/champion-form";
 
 export default async function CampeonesPage() {
@@ -46,13 +47,13 @@ export default async function CampeonesPage() {
               <PickCard
                 label="Campeón"
                 icon={<Trophy className="size-4 text-accent" />}
-                flag={pick.championTeam.flagEmoji}
+                fifaCode={pick.championTeam.fifaCode}
                 name={pick.championTeam.name}
               />
               <PickCard
                 label="Subcampeón"
                 icon={<Medal className="size-4 text-white/70" />}
-                flag={pick.runnerUpTeam.flagEmoji}
+                fifaCode={pick.runnerUpTeam.fifaCode}
                 name={pick.runnerUpTeam.name}
               />
             </div>
@@ -70,12 +71,12 @@ export default async function CampeonesPage() {
 function PickCard({
   label,
   icon,
-  flag,
+  fifaCode,
   name,
 }: {
   label: string;
   icon: React.ReactNode;
-  flag: string;
+  fifaCode: string;
   name: string;
 }) {
   return (
@@ -84,7 +85,9 @@ function PickCard({
         {icon}
         {label}
       </div>
-      <div className="text-5xl">{flag}</div>
+      <div className="flex justify-center">
+        <Flag code={fifaCode} size={40} />
+      </div>
       <div className="mt-3 text-base font-semibold text-white">{name}</div>
     </div>
   );

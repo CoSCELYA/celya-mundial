@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { getScoringConfig } from "@/lib/scoring";
 import { formatDateTime, isPredictionOpen, predictionDeadline } from "@/lib/dates";
 import { PHASE_LABEL } from "@/lib/constants";
+import { Flag } from "@/components/flag";
 import { TriviaForm } from "./_components/trivia-form";
 import { ScoreForm } from "./_components/score-form";
 
@@ -79,7 +80,7 @@ export default async function PartidoDetallePage({
 
         <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
           <div className="flex flex-col items-center gap-2">
-            <span className="text-5xl">{homeFlag}</span>
+            {match.homeTeam && <Flag code={match.homeTeam.fifaCode} size={40} />}
             <span className="text-sm font-semibold text-white">{homeName}</span>
           </div>
           <div className="px-2">
@@ -94,7 +95,7 @@ export default async function PartidoDetallePage({
             )}
           </div>
           <div className="flex flex-col items-center gap-2">
-            <span className="text-5xl">{awayFlag}</span>
+            {match.awayTeam && <Flag code={match.awayTeam.fifaCode} size={40} />}
             <span className="text-sm font-semibold text-white">{awayName}</span>
           </div>
         </div>

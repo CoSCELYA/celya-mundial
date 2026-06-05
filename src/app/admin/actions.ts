@@ -7,9 +7,9 @@ import { requireAdmin, requireSuperAdmin } from "@/lib/auth";
 import { getSession } from "@/lib/session";
 import { hashPassword } from "@/lib/password";
 import { recomputeMatchPoints, recomputeChampionPoints } from "@/lib/scoring";
+import { syncWorldCup } from "@/lib/football-data";
 import {
   userUpsertSchema,
-  matchUpsertSchema,
   scoreSchema,
   questionUpsertSchema,
   prizeUpsertSchema,
@@ -164,93 +164,17 @@ export async function setUserStatus(fd: FormData): Promise<void> {
 // Partidos
 // ---------------------------------------------------------------------------
 
-export async function createMatch(_prev: ActionState, fd: FormData): Promise<ActionState> {
+// Los partidos NO se crean/editan/eliminan: son los 104 oficiales del Mundial.
+// Se sincronizan desde football-data.org (equipos de eliminatorias y marcadores).
+export async function syncMatches(_prev: ActionState, _fd: FormData): Promise<ActionState> {
   await requireAdmin();
 
-  const parsed = matchUpsertSchema.safeParse({
-    phase: field(fd, "phase"),
-    groupName: optionalField(fd, "groupName"),
-    homeTeamId: optionalField(fd, "homeTeamId"),
-    awayTeamId: optionalField(fd, "awayTeamId"),
-    kickoffAt: field(fd, "kickoffAt"),
-    venue: optionalField(fd, "venue"),
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
-  }
-
-  const kickoff = new Date(parsed.data.kickoffAt);
-  if (Number.isNaN(kickoff.getTime())) {
-    return { error: "La fecha y hora del partido no es válida." };
-  }
-
-  await prisma.match.create({
-    data: {
-      phase: parsed.data.phase,
-      groupName: parsed.data.groupName ?? null,
-      homeTeamId: parsed.data.homeTeamId ?? null,
-      awayTeamId: parsed.data.awayTeamId ?? null,
-      kickoffAt: kickoff,
-      venue: parsed.data.venue ?? null,
-    },
-  });
-
-  revalidateAdmin(["/admin/partidos", "/admin"]);
-  return { success: "Partido creado correctamente." };
+  const result = await syncWorldCup();
+  revalidateAdmin(["/admin/partidos", "/admin/tabla", "/admin", "/partidos", "/tabla"]);
+  return result.ok ? { success: result.message } : { error: result.message };
 }
 
-export async function updateMatch(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requireAdmin();
-
-  const id = Number(field(fd, "id"));
-  if (!Number.isInteger(id) || id <= 0) {
-    return { error: "Partido inválido." };
-  }
-
-  const parsed = matchUpsertSchema.safeParse({
-    phase: field(fd, "phase"),
-    groupName: optionalField(fd, "groupName"),
-    homeTeamId: optionalField(fd, "homeTeamId"),
-    awayTeamId: optionalField(fd, "awayTeamId"),
-    kickoffAt: field(fd, "kickoffAt"),
-    venue: optionalField(fd, "venue"),
-  });
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message };
-  }
-
-  const kickoff = new Date(parsed.data.kickoffAt);
-  if (Number.isNaN(kickoff.getTime())) {
-    return { error: "La fecha y hora del partido no es válida." };
-  }
-
-  await prisma.match.update({
-    where: { id },
-    data: {
-      phase: parsed.data.phase,
-      groupName: parsed.data.groupName ?? null,
-      homeTeamId: parsed.data.homeTeamId ?? null,
-      awayTeamId: parsed.data.awayTeamId ?? null,
-      kickoffAt: kickoff,
-      venue: parsed.data.venue ?? null,
-    },
-  });
-
-  revalidateAdmin(["/admin/partidos", "/admin"]);
-  return { success: "Partido actualizado correctamente." };
-}
-
-export async function deleteMatch(fd: FormData): Promise<void> {
-  await requireAdmin();
-
-  const id = Number(field(fd, "id"));
-  if (!Number.isInteger(id) || id <= 0) return;
-
-  await prisma.match.delete({ where: { id } });
-
-  revalidateAdmin(["/admin/partidos", "/admin/preguntas", "/admin/tabla", "/admin"]);
-}
-
+// Carga/corrección manual del marcador (respaldo si la API no está disponible).
 export async function setMatchResult(_prev: ActionState, fd: FormData): Promise<ActionState> {
   await requireAdmin();
 

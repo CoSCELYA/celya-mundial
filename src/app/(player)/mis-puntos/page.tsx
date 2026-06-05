@@ -1,6 +1,7 @@
 import { requireSession } from "@/lib/auth";
 import { getUserSummary } from "@/lib/queries";
 import { formatDate } from "@/lib/dates";
+import { Flag } from "@/components/flag";
 import type { PointsType } from "@prisma/client";
 
 export const metadata = {
@@ -54,12 +55,12 @@ function MatchLabel({ entry }: { entry: SummaryEntry }) {
   return (
     <span className="flex items-center gap-2 text-white/90">
       <span className="inline-flex items-center gap-1.5">
-        <span className="text-lg leading-none">{home?.flagEmoji ?? "🏳️"}</span>
+        {home ? <Flag code={home.fifaCode} size={20} /> : null}
         <span className="truncate">{home?.name ?? "Por definir"}</span>
       </span>
       <span className="text-white/40">vs</span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="text-lg leading-none">{away?.flagEmoji ?? "🏳️"}</span>
+        {away ? <Flag code={away.fifaCode} size={20} /> : null}
         <span className="truncate">{away?.name ?? "Por definir"}</span>
       </span>
     </span>

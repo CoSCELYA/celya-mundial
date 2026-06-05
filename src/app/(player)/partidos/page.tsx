@@ -6,6 +6,7 @@ import { getScoringConfig } from "@/lib/scoring";
 import { formatDateTime, isPredictionOpen } from "@/lib/dates";
 import { PHASE_ORDER, PHASE_LABEL } from "@/lib/constants";
 import { CalendarDays, Lock, PencilLine, ArrowRight } from "lucide-react";
+import { Flag } from "@/components/flag";
 
 type MatchWithTeams = Match & {
   homeTeam: Team | null;
@@ -102,7 +103,7 @@ function MatchCard({
 
       <div className="flex items-center justify-between gap-3">
         <TeamSide
-          flag={match.homeTeam?.flagEmoji}
+          fifaCode={match.homeTeam?.fifaCode}
           name={match.homeTeam?.name}
           align="start"
         />
@@ -110,7 +111,7 @@ function MatchCard({
           vs
         </span>
         <TeamSide
-          flag={match.awayTeam?.flagEmoji}
+          fifaCode={match.awayTeam?.fifaCode}
           name={match.awayTeam?.name}
           align="end"
         />
@@ -162,11 +163,11 @@ function MatchCard({
 }
 
 function TeamSide({
-  flag,
+  fifaCode,
   name,
   align,
 }: {
-  flag?: string;
+  fifaCode?: string;
   name?: string;
   align: "start" | "end";
 }) {
@@ -176,7 +177,7 @@ function TeamSide({
         align === "end" ? "flex-row-reverse text-right" : "text-left"
       }`}
     >
-      <span className="text-2xl">{flag ?? "🏳️"}</span>
+      {fifaCode && <Flag code={fifaCode} size={22} />}
       <span className="truncate text-sm font-semibold text-white">
         {name ?? "Por definir"}
       </span>
