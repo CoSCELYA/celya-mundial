@@ -60,7 +60,7 @@ model User {
   documento    String?
   passwordHash String
   role         Role       @default(EMPLEADO)
-  status       UserStatus @default(PENDING)
+  status       UserStatus @default(ACTIVE)
   avatarUrl    String?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -69,19 +69,6 @@ model User {
   answers      QuestionAnswer[]
   championPick ChampionPick?
   pointsLog    PointsEntry[]
-  resetTokens  PasswordResetToken[]
-}
-
-model PasswordResetToken {
-  id        Int       @id @default(autoincrement())
-  userId    Int
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  @@index([userId])
 }
 
 model Team {

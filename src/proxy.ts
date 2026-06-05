@@ -7,12 +7,7 @@ import { jwtVerify } from "jose";
 
 const SESSION_COOKIE = "polla_session";
 
-const PUBLIC_PATHS = [
-  "/login",
-  "/register",
-  "/forgot-password",
-  "/reset-password",
-];
+const PUBLIC_PATHS = ["/login", "/register"];
 
 function getSecret(): Uint8Array {
   return new TextEncoder().encode(process.env.AUTH_SECRET ?? "");

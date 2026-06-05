@@ -1,4 +1,4 @@
-import { Trash2, Check } from "lucide-react";
+import { Trash2, UserCheck, UserX } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { deleteUser, setUserStatus } from "@/app/admin/actions";
@@ -11,7 +11,7 @@ const TH =
   "px-4 py-3 text-left text-[11px] uppercase tracking-wide text-muted-foreground font-semibold";
 
 export default async function UsuariosPage() {
-  await requireAdmin();
+  const session = await requireAdmin();
 
   const users = await prisma.user.findMany({
     orderBy: { createdAt: "desc" },
@@ -84,16 +84,31 @@ export default async function UsuariosPage() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
-                      {user.status === "PENDING" && (
-                        <form action={setUserStatus}>
-                          <input type="hidden" name="id" value={user.id} />
-                          <input type="hidden" name="status" value="ACTIVE" />
-                          <SubmitButton variant="secondary" size="sm">
-                            <Check />
-                            Aprobar
-                          </SubmitButton>
-                        </form>
-                      )}
+                      {user.id !== session.userId &&
+                        (user.status === "ACTIVE" ? (
+                          <form action={setUserStatus}>
+                            <input type="hidden" name="id" value={user.id} />
+                            <input type="hidden" name="status" value="INACTIVE" />
+                            <SubmitButton
+                              variant="ghost"
+                              size="sm"
+                              title="Inactivar usuario"
+                              className="text-danger hover:bg-danger/10"
+                            >
+                              <UserX />
+                              Inactivar
+                            </SubmitButton>
+                          </form>
+                        ) : (
+                          <form action={setUserStatus}>
+                            <input type="hidden" name="id" value={user.id} />
+                            <input type="hidden" name="status" value="ACTIVE" />
+                            <SubmitButton variant="secondary" size="sm" title="Activar usuario">
+                              <UserCheck />
+                              Activar
+                            </SubmitButton>
+                          </form>
+                        ))}
                       <EditUserButton
                         user={{
                           id: user.id,

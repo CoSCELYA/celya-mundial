@@ -22,9 +22,8 @@ export type UserFormData = {
 };
 
 const ROLES = ["SUPER_ADMIN", "ADMIN", "EMPLEADO"] as const;
-const STATUSES = ["PENDING", "ACTIVE", "INACTIVE"] as const;
+const STATUSES = ["ACTIVE", "INACTIVE"] as const;
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: "Pendiente",
   ACTIVE: "Activo",
   INACTIVE: "Inactivo",
 };

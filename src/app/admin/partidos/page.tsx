@@ -19,8 +19,9 @@ const TD = "px-3 py-3 align-middle text-sm text-foreground";
 export default async function PartidosPage() {
   await requireAdmin();
 
+  // Orden por fase (grupos → final, según el enum) y luego por fecha.
   const matches = await prisma.match.findMany({
-    orderBy: { kickoffAt: "asc" },
+    orderBy: [{ phase: "asc" }, { kickoffAt: "asc" }],
     include: { homeTeam: true, awayTeam: true },
   });
 

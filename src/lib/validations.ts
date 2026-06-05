@@ -19,15 +19,6 @@ export const registerSchema = z.object({
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
-export const forgotSchema = z.object({
-  email: z.string().email("Correo inválido"),
-});
-
-export const resetSchema = z.object({
-  token: z.string().min(1),
-  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
-});
-
 export const scoreSchema = z.object({
   homeScore: z.coerce.number().int().min(0).max(99),
   awayScore: z.coerce.number().int().min(0).max(99),

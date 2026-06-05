@@ -15,7 +15,8 @@ trivia de negocio antes de cada partido, ranking, premios y panel de administrac
 - **EMPLEADO**: pronósticos, trivia, campeón/subcampeón, sus puntos, tabla, premios.
 
 ## Funcionalidades
-- Login, auto-registro (dominio `@celya.co`, aprobación del admin) y recuperación de contraseña.
+- Login y auto-registro: cualquier correo `@celya.co` se registra y entra de inmediato (el control de participantes es interno).
+- El SUPER_ADMIN/ADMIN puede **inactivar** un usuario (p. ej. si un empleado deja la empresa); el bloqueo es inmediato.
 - Gestión de usuarios, partidos (con carga de resultados), preguntas de trivia (104, se bloquean al ser respondidas) y premios.
 - Pronóstico de marcadores con **gate de trivia** y deadline de 1 hora antes del partido.
 - Selección de campeón/subcampeón (bloqueada al iniciar octavos).
@@ -56,15 +57,14 @@ las eliminatorias y los marcadores se traen automáticamente de [football-data.o
 1. Crea un proyecto en Railway y añade el plugin **PostgreSQL** (define `DATABASE_URL`).
 2. Conecta este repositorio como servicio web.
 3. Define las variables de entorno (ver `.env.example`): `AUTH_SECRET`, `APP_URL`,
-   `ALLOWED_EMAIL_DOMAIN`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, y opcionalmente `RESEND_API_KEY`/`EMAIL_FROM`.
+   `ALLOWED_EMAIL_DOMAIN`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, y opcionalmente `FOOTBALL_DATA_TOKEN`/`CRON_SECRET`.
 4. El build corre `prisma generate && next build`; el arranque corre `prisma migrate deploy && next start`
    (aplica las migraciones de `prisma/migrations`).
 5. Tras el primer despliegue, ejecuta el seed una vez (Railway → comando puntual):
    `npm run db:seed`.
 
 ## Variables de entorno
-Ver [`.env.example`](.env.example). En desarrollo, si no defines `RESEND_API_KEY`, los
-correos de recuperación se imprimen en consola con el enlace de reseteo.
+Ver [`.env.example`](.env.example).
 
 ## Scripts útiles
 - `npm run dev` — servidor de desarrollo

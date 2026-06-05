@@ -6,12 +6,29 @@ import { prisma } from "@/lib/db";
 
 const ADMIN_ROLES: Role[] = ["ADMIN", "SUPER_ADMIN"];
 
-/** Require any authenticated, ACTIVE session. Redirects to /login otherwise. */
+/**
+ * Require an authenticated, ACTIVE session. Validates status/role against the
+ * database on every call so deactivating a user takes effect immediately
+ * (even if their JWT cookie is still valid).
+ */
 export async function requireSession(): Promise<SessionPayload> {
   const session = await getSession();
   if (!session) redirect("/login");
-  if (session.status !== "ACTIVE") redirect("/login?estado=inactivo");
-  return session;
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { status: true, role: true, fullName: true, email: true },
+  });
+  // Cuenta inactiva o inexistente: cerrar sesión (borra la cookie) y volver al login.
+  if (!user || user.status !== "ACTIVE") redirect("/api/logout?estado=inactivo");
+
+  return {
+    ...session,
+    status: user.status,
+    role: user.role,
+    name: user.fullName,
+    email: user.email,
+  };
 }
 
 /** Require an admin-level session (ADMIN or SUPER_ADMIN). */

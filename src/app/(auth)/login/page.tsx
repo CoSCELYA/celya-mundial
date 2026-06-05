@@ -29,14 +29,12 @@ export default function LoginPage() {
         </div>
         <SubmitButton className="w-full">Ingresar</SubmitButton>
       </form>
-      <div className="mt-4 flex items-center justify-between text-sm">
-        <Link href="/forgot-password" className="text-muted-foreground hover:text-foreground">
-          ¿Olvidaste tu contraseña?
-        </Link>
+      <p className="mt-4 text-center text-sm text-muted-foreground">
+        ¿No tienes cuenta?{" "}
         <Link href="/register" className="font-medium text-foreground hover:underline">
-          Crear cuenta
+          Regístrate con tu correo @celya.co
         </Link>
-      </div>
+      </p>
     </Card>
   );
 }
