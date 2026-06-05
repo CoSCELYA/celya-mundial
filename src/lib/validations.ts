@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-const allowedDomain = process.env.ALLOWED_EMAIL_DOMAIN ?? "celya.co";
+// Uno o varios dominios permitidos, separados por coma (ej: "celya.co,bpoti.com").
+const allowedDomains = (process.env.ALLOWED_EMAIL_DOMAIN ?? "celya.co")
+  .split(",")
+  .map((d) => d.trim().toLowerCase())
+  .filter(Boolean);
 
 export const loginSchema = z.object({
   email: z.string().email("Correo inválido"),
@@ -13,8 +17,10 @@ export const registerSchema = z.object({
   email: z
     .string()
     .email("Correo inválido")
-    .refine((e) => e.toLowerCase().endsWith(`@${allowedDomain}`), {
-      message: `El correo debe ser del dominio @${allowedDomain}`,
+    .refine((e) => allowedDomains.some((d) => e.toLowerCase().endsWith(`@${d}`)), {
+      message: `El correo debe ser de un dominio autorizado (${allowedDomains
+        .map((d) => `@${d}`)
+        .join(", ")})`,
     }),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });

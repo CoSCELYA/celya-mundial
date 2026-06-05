@@ -21,7 +21,7 @@ export default function LoginPage() {
         <FormMessage state={state} />
         <div>
           <Label htmlFor="email">Correo</Label>
-          <Input id="email" name="email" type="email" placeholder="tu@celya.co" required />
+          <Input id="email" name="email" type="email" placeholder="tu@empresa.com" required />
         </div>
         <div>
           <Label htmlFor="password">Contraseña</Label>
@@ -32,7 +32,7 @@ export default function LoginPage() {
       <p className="mt-4 text-center text-sm text-muted-foreground">
         ¿No tienes cuenta?{" "}
         <Link href="/register" className="font-medium text-foreground hover:underline">
-          Regístrate con tu correo @celya.co
+          Regístrate con tu correo corporativo
         </Link>
       </p>
     </Card>

@@ -15,7 +15,7 @@ export default function RegisterPage() {
     <Card className="p-6">
       <h1 className="mb-1 text-xl font-semibold">Crear cuenta</h1>
       <p className="mb-5 text-sm text-muted-foreground">
-        Regístrate con tu correo corporativo de celya.
+        Regístrate con tu correo corporativo autorizado.
       </p>
       <form action={action} className="space-y-4">
         <FormMessage state={state} />
@@ -29,7 +29,7 @@ export default function RegisterPage() {
         </div>
         <div>
           <Label htmlFor="email">Correo</Label>
-          <Input id="email" name="email" type="email" placeholder="tu@celya.co" required />
+          <Input id="email" name="email" type="email" placeholder="tu@empresa.com" required />
         </div>
         <div>
           <Label htmlFor="password">Contraseña</Label>

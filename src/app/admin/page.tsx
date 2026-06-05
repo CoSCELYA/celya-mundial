@@ -44,7 +44,7 @@ export default async function AdminDashboardPage() {
 
   const [
     totalUsers,
-    pendingUsers,
+    inactiveUsers,
     totalMatches,
     finishedMatches,
     totalQuestions,
@@ -52,7 +52,7 @@ export default async function AdminDashboardPage() {
     standings,
   ] = await Promise.all([
     prisma.user.count(),
-    prisma.user.count({ where: { status: "PENDING" } }),
+    prisma.user.count({ where: { status: "INACTIVE" } }),
     prisma.match.count(),
     prisma.match.count({ where: { status: "FINISHED" } }),
     prisma.question.count(),
@@ -77,12 +77,8 @@ export default async function AdminDashboardPage() {
 
       {/* KPI stat cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard label="Total usuarios" value={totalUsers} />
-        <StatCard
-          label="Pendientes de aprobación"
-          value={pendingUsers}
-          highlight
-        />
+        <StatCard label="Total usuarios" value={totalUsers} highlight />
+        <StatCard label="Usuarios inactivos" value={inactiveUsers} />
         <StatCard label="Total partidos" value={totalMatches} />
         <StatCard label="Partidos finalizados" value={finishedMatches} />
         <StatCard label="Total preguntas" value={totalQuestions} />

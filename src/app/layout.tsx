@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Poppins, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "flag-icons/css/flag-icons.min.css";
-import { ThemeProvider } from "@/components/theme-provider";
 
 const poppins = Poppins({
   variable: "--font-poppins",
@@ -25,14 +24,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html
-      lang="es"
-      suppressHydrationWarning
-      className={`${poppins.variable} ${geistMono.variable}`}
-    >
-      <body className="min-h-screen">
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
+    <html lang="es" className={`dark ${poppins.variable} ${geistMono.variable}`}>
+      <body className="min-h-screen">{children}</body>
     </html>
   );
 }

@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Shield } from "lucide-react";
 import { requireSession, isAdminRole } from "@/lib/auth";
 import { LogoBrand } from "@/components/logo";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { LogoutButton } from "@/components/logout-button";
 import { PlayerNav } from "@/app/(player)/_components/nav";
 
@@ -39,7 +38,6 @@ export default async function PlayerLayout({
             <span className="hidden text-sm font-medium text-white/80 sm:inline">
               {s.name}
             </span>
-            <ThemeToggle />
             <LogoutButton variant="ghost" />
           </div>
         </div>

@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { requireAdmin } from "@/lib/auth";
 import { getSession } from "@/lib/session";
 import { Logo } from "@/components/logo";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { LogoutButton } from "@/components/logout-button";
 import { AdminNav } from "@/app/admin/_components/nav";
 
@@ -35,7 +34,6 @@ export default async function AdminLayout({
         <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4 sm:px-6">
           <h1 className="text-sm font-semibold sm:text-base">Panel de administración</h1>
           <div className="flex items-center gap-3">
-            <ThemeToggle />
             {session && (
               <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
                 {session.name}
