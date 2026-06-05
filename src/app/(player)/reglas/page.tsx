@@ -1,6 +1,16 @@
 import { requireSession } from "@/lib/auth";
 import { getScoringConfig } from "@/lib/scoring";
+import { PHASE_LABEL } from "@/lib/constants";
 import { BookOpen, ClipboardList, Crown, HandHeart, Target } from "lucide-react";
+
+function lockLabel(minutes: number): string {
+  if (minutes <= 0) return "el inicio del partido";
+  if (minutes % 60 === 0) {
+    const h = minutes / 60;
+    return `${h} ${h === 1 ? "hora" : "horas"} antes`;
+  }
+  return `${minutes} minutos antes`;
+}
 
 export default async function ReglasPage() {
   await requireSession();
@@ -30,8 +40,8 @@ export default async function ReglasPage() {
             </li>
             <li>
               Registra tu marcador del partido (goles del local y del visitante) hasta{" "}
-              <strong className="text-white">1 hora antes</strong> del inicio. Después de ese
-              momento se cierra y no podrás cambiarlo.
+              <strong className="text-white">{lockLabel(cfg.lockMinutes)}</strong> del inicio.
+              Después de ese momento se cierra y no podrás cambiarlo.
             </li>
             <li>
               Cuando el partido termine y se cargue el resultado oficial, se calcularán tus puntos
@@ -57,8 +67,9 @@ export default async function ReglasPage() {
         <Section icon={<Crown className="size-5 text-accent" />} title="Campeón y Subcampeón">
           <p className="text-sm leading-relaxed text-white/80">
             Elige quién levantará la copa y quién quedará en segundo lugar. Puedes editar tu
-            selección hasta que comiencen los <strong className="text-white">Octavos de final</strong>.
-            Una vez iniciada esa fase, tu elección queda bloqueada.
+            selección hasta que comience la fase de{" "}
+            <strong className="text-white">{PHASE_LABEL[cfg.championLockPhase]}</strong>. Una vez
+            iniciada esa fase, tu elección queda bloqueada.
           </p>
         </Section>
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState, useEffect, useState, type ReactNode } from "react";
+import { useActionState, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
-import type { MatchStatus } from "@prisma/client";
+import type { MatchStatus, Phase } from "@prisma/client";
 
 import { setMatchResult, type ActionState } from "@/app/admin/actions";
 
@@ -14,6 +14,7 @@ import { Flag } from "@/components/flag";
 
 export type ResultMatch = {
   id: number;
+  phase: Phase;
   homeName: string;
   awayName: string;
   homeCode: string | null;
@@ -39,9 +40,20 @@ export function ResultDialog({
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState<ActionState, FormData>(setMatchResult, null);
 
-  useEffect(() => {
+  // Cierra el diálogo al tener éxito (patrón de estado derivado, sin efecto).
+  const [handled, setHandled] = useState(state);
+  if (state !== handled) {
+    setHandled(state);
     if (state?.success) setOpen(false);
-  }, [state]);
+  }
+
+  const [status, setStatus] = useState<MatchStatus>(match.status);
+  const [home, setHome] = useState<string>(String(match.homeScore ?? 0));
+  const [away, setAway] = useState<string>(String(match.awayScore ?? 0));
+
+  const isKnockout = match.phase !== "GROUP";
+  const isTie = home !== "" && away !== "" && Number(home) === Number(away);
+  const needsWinner = isKnockout && status === "FINISHED" && isTie;
 
   return (
     <>
@@ -87,7 +99,8 @@ export function ResultDialog({
                     type="number"
                     min={0}
                     className="tnum"
-                    defaultValue={match.homeScore ?? 0}
+                    value={home}
+                    onChange={(e) => setHome(e.target.value)}
                     required
                   />
                 </div>
@@ -99,7 +112,8 @@ export function ResultDialog({
                     type="number"
                     min={0}
                     className="tnum"
-                    defaultValue={match.awayScore ?? 0}
+                    value={away}
+                    onChange={(e) => setAway(e.target.value)}
                     required
                   />
                 </div>
@@ -107,7 +121,13 @@ export function ResultDialog({
 
               <div>
                 <Label htmlFor="rd-status">Estado</Label>
-                <Select id="rd-status" name="status" defaultValue={match.status} required>
+                <Select
+                  id="rd-status"
+                  name="status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as MatchStatus)}
+                  required
+                >
                   {STATUS_OPTIONS.map((s) => (
                     <option key={s.value} value={s.value}>
                       {s.label}
@@ -115,6 +135,22 @@ export function ResultDialog({
                   ))}
                 </Select>
               </div>
+
+              {needsWinner && (
+                <div>
+                  <Label htmlFor="rd-winner">Ganador (definición por penales)</Label>
+                  <Select id="rd-winner" name="winner" defaultValue="" required>
+                    <option value="" disabled>
+                      Selecciona el ganador
+                    </option>
+                    <option value="home">{match.homeName}</option>
+                    <option value="away">{match.awayName}</option>
+                  </Select>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    El partido terminó empatado: indica quién avanzó.
+                  </p>
+                </div>
+              )}
 
               <FormMessage state={state} />
 

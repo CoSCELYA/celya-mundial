@@ -50,8 +50,8 @@ export default async function PartidoDetallePage({
 
   const homeName = match.homeTeam?.name ?? "Por definir";
   const awayName = match.awayTeam?.name ?? "Por definir";
-  const homeFlag = match.homeTeam?.flagEmoji ?? "🏳️";
-  const awayFlag = match.awayTeam?.flagEmoji ?? "🏳️";
+  const homeCode = match.homeTeam?.fifaCode ?? null;
+  const awayCode = match.awayTeam?.fifaCode ?? null;
 
   const tag =
     match.phase === "GROUP" && match.groupName
@@ -142,8 +142,8 @@ export default async function PartidoDetallePage({
             matchId={match.id}
             homeName={homeName}
             awayName={awayName}
-            homeFlag={homeFlag}
-            awayFlag={awayFlag}
+            homeCode={homeCode}
+            awayCode={awayCode}
             homeScore={prediction?.homeScore ?? null}
             awayScore={prediction?.awayScore ?? null}
             deadlineLabel={deadlineLabel}

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Class-based dark mode (toggled by next-themes) */
+/* Class-based dark mode (la app fuerza .dark en <html>) */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ---------- Semantic tokens · LIGHT ---------- */

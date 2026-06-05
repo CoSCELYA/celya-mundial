@@ -6,13 +6,14 @@ import { savePrediction, type ActionState } from "@/app/(player)/actions";
 import { Input, Label } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormMessage } from "@/components/form-message";
+import { Flag } from "@/components/flag";
 
 export function ScoreForm({
   matchId,
   homeName,
   awayName,
-  homeFlag,
-  awayFlag,
+  homeCode,
+  awayCode,
   homeScore,
   awayScore,
   deadlineLabel,
@@ -20,8 +21,8 @@ export function ScoreForm({
   matchId: number;
   homeName: string;
   awayName: string;
-  homeFlag: string;
-  awayFlag: string;
+  homeCode: string | null;
+  awayCode: string | null;
   homeScore: number | null;
   awayScore: number | null;
   deadlineLabel: string;
@@ -51,8 +52,8 @@ export function ScoreForm({
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="homeScore" className="text-white/80">
-            <span className="mr-1">{homeFlag}</span>
+          <Label htmlFor="homeScore" className="flex items-center gap-1.5 text-white/80">
+            <Flag code={homeCode} size={16} />
             {homeName}
           </Label>
           <Input
@@ -69,8 +70,8 @@ export function ScoreForm({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="awayScore" className="text-white/80">
-            <span className="mr-1">{awayFlag}</span>
+          <Label htmlFor="awayScore" className="flex items-center gap-1.5 text-white/80">
+            <Flag code={awayCode} size={16} />
             {awayName}
           </Label>
           <Input

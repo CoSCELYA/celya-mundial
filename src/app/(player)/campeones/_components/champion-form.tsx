@@ -50,7 +50,7 @@ export function ChampionForm({
           </option>
           {teams.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.flagEmoji} {t.name}
+              {t.name}
             </option>
           ))}
         </Select>
@@ -72,7 +72,7 @@ export function ChampionForm({
           </option>
           {teams.map((t) => (
             <option key={t.id} value={t.id}>
-              {t.flagEmoji} {t.name}
+              {t.name}
             </option>
           ))}
         </Select>

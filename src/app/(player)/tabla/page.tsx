@@ -117,14 +117,16 @@ function StandingItem({
           {getInitials(row.fullName)}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-white">
-            {row.fullName}
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-medium text-white">
+              {row.fullName}
+            </p>
             {isCurrentUser && (
-              <span className="ml-2 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">
+              <span className="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent-foreground">
                 Tú
               </span>
             )}
-          </p>
+          </div>
           {/* Campeones en móvil */}
           <p className="mt-0.5 flex items-center gap-2 text-xs text-white/50 md:hidden">
             <span>{row.champion ? <Flag code={row.champion.fifaCode} size={18} /> : "—"}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -42,10 +42,18 @@ export function QuestionDialog({
     question?.options ?? ["", "", "", ""],
   );
 
-  // Cierra el modal cuando la acción fue exitosa.
-  useEffect(() => {
+  // Cierra el modal cuando la acción fue exitosa (estado derivado, sin efecto).
+  const [handled, setHandled] = useState(state);
+  if (state !== handled) {
+    setHandled(state);
     if (state?.success) setOpen(false);
-  }, [state]);
+  }
+
+  function openDialog() {
+    // Reinicia las opciones al abrir para no arrastrar valores previos.
+    setOptions(question?.options ?? ["", "", "", ""]);
+    setOpen(true);
+  }
 
   function setOption(index: number, value: string) {
     setOptions((prev) => {
@@ -61,7 +69,7 @@ export function QuestionDialog({
         type="button"
         variant={isEdit ? "ghost" : "primary"}
         size={isEdit ? "sm" : "md"}
-        onClick={() => setOpen(true)}
+        onClick={openDialog}
         className={isEdit ? "text-xs" : undefined}
       >
         {trigger}

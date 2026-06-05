@@ -27,7 +27,6 @@ export function Badge({ className, tone, ...props }: BadgeProps) {
 const TONE_BY_STATUS: Record<string, "neutral" | "yellow" | "teal" | "red"> = {
   ACTIVE: "teal",
   INACTIVE: "neutral",
-  PENDING: "yellow",
   SCHEDULED: "neutral",
   LIVE: "yellow",
   FINISHED: "teal",
@@ -36,7 +35,6 @@ const TONE_BY_STATUS: Record<string, "neutral" | "yellow" | "teal" | "red"> = {
 const LABEL_BY_STATUS: Record<string, string> = {
   ACTIVE: "Activo",
   INACTIVE: "Inactivo",
-  PENDING: "Pendiente",
   SCHEDULED: "Programado",
   LIVE: "En juego",
   FINISHED: "Finalizado",

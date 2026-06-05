@@ -40,7 +40,7 @@ export const userUpsertSchema = z.object({
   email: z.string().email(),
   documento: z.string().optional(),
   role: z.enum(["SUPER_ADMIN", "ADMIN", "EMPLEADO"]),
-  status: z.enum(["PENDING", "ACTIVE", "INACTIVE"]),
+  status: z.enum(["ACTIVE", "INACTIVE"]),
 });
 
 export const matchUpsertSchema = z.object({

@@ -22,14 +22,14 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
   if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
     return { error: "Correo o contraseña incorrectos." };
   }
-  if (user.status === "INACTIVE") {
-    return { error: "Tu cuenta está inactiva. Contacta al administrador." };
+  if (user.status !== "ACTIVE") {
+    return { error: "Tu cuenta no está activa. Contacta al administrador." };
   }
 
   await setSessionCookie({
     userId: user.id,
     role: user.role,
-    status: "ACTIVE",
+    status: user.status,
     name: user.fullName,
     email: user.email,
   });
@@ -69,7 +69,7 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
   await setSessionCookie({
     userId: user.id,
     role: user.role,
-    status: "ACTIVE",
+    status: user.status,
     name: user.fullName,
     email: user.email,
   });

@@ -100,6 +100,8 @@ model Match {
   status     MatchStatus @default(SCHEDULED)
   homeScore  Int?
   awayScore  Int?
+  // Ganador del partido (para eliminatorias definidas por penales cuando el marcador queda empatado).
+  winnerTeamId Int?
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 

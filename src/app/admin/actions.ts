@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth";
-import { getSession } from "@/lib/session";
 import { hashPassword } from "@/lib/password";
 import { recomputeMatchPoints, recomputeChampionPoints } from "@/lib/scoring";
 import { syncWorldCup } from "@/lib/football-data";
@@ -37,7 +36,7 @@ function revalidateAdmin(paths: string[]): void {
 // ---------------------------------------------------------------------------
 
 export async function createUser(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requireAdmin();
+  const me = await requireAdmin();
 
   const parsed = userUpsertSchema.safeParse({
     fullName: field(fd, "fullName"),
@@ -48,6 +47,11 @@ export async function createUser(_prev: ActionState, fd: FormData): Promise<Acti
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
+  }
+
+  // Solo un SUPER_ADMIN puede crear/asignar el rol SUPER_ADMIN.
+  if (parsed.data.role === "SUPER_ADMIN" && me.role !== "SUPER_ADMIN") {
+    return { error: "Solo un Super Admin puede asignar el rol Super Admin." };
   }
 
   const password = field(fd, "password");
@@ -76,7 +80,7 @@ export async function createUser(_prev: ActionState, fd: FormData): Promise<Acti
 }
 
 export async function updateUser(_prev: ActionState, fd: FormData): Promise<ActionState> {
-  await requireAdmin();
+  const me = await requireAdmin();
 
   const id = Number(field(fd, "id"));
   if (!Number.isInteger(id) || id <= 0) {
@@ -92,6 +96,42 @@ export async function updateUser(_prev: ActionState, fd: FormData): Promise<Acti
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
+  }
+
+  const target = await prisma.user.findUnique({ where: { id } });
+  if (!target) {
+    return { error: "El usuario no existe." };
+  }
+
+  // Solo un SUPER_ADMIN puede gestionar (o crear) cuentas SUPER_ADMIN.
+  if (
+    (target.role === "SUPER_ADMIN" || parsed.data.role === "SUPER_ADMIN") &&
+    me.role !== "SUPER_ADMIN"
+  ) {
+    return { error: "Solo un Super Admin puede gestionar cuentas Super Admin." };
+  }
+
+  // Un admin no puede auto-degradarse ni auto-inactivarse (evita quedar bloqueado).
+  if (me.userId === id) {
+    if (parsed.data.role !== target.role) {
+      return { error: "No puedes cambiar tu propio rol." };
+    }
+    if (parsed.data.status !== "ACTIVE") {
+      return { error: "No puedes inactivar tu propia cuenta." };
+    }
+  }
+
+  // Nunca dejar el sistema sin un SUPER_ADMIN activo.
+  if (
+    target.role === "SUPER_ADMIN" &&
+    (parsed.data.role !== "SUPER_ADMIN" || parsed.data.status !== "ACTIVE")
+  ) {
+    const activeSupers = await prisma.user.count({
+      where: { role: "SUPER_ADMIN", status: "ACTIVE" },
+    });
+    if (activeSupers <= 1) {
+      return { error: "Debe quedar al menos un Super Admin activo." };
+    }
   }
 
   const conflict = await prisma.user.findFirst({
@@ -158,15 +198,24 @@ export async function resetUserPassword(_prev: ActionState, fd: FormData): Promi
 }
 
 export async function deleteUser(fd: FormData): Promise<void> {
-  await requireAdmin();
+  const me = await requireAdmin();
 
   const id = Number(field(fd, "id"));
   if (!Number.isInteger(id) || id <= 0) return;
 
-  const session = await getSession();
-  if (session && session.userId === id) {
-    // Un admin no puede eliminarse a sí mismo.
-    return;
+  // Un admin no puede eliminarse a sí mismo.
+  if (me.userId === id) return;
+
+  const target = await prisma.user.findUnique({ where: { id } });
+  if (!target) return;
+
+  // Solo un SUPER_ADMIN puede eliminar a otro SUPER_ADMIN, y nunca al último activo.
+  if (target.role === "SUPER_ADMIN") {
+    if (me.role !== "SUPER_ADMIN") return;
+    const activeSupers = await prisma.user.count({
+      where: { role: "SUPER_ADMIN", status: "ACTIVE" },
+    });
+    if (activeSupers <= 1) return;
   }
 
   await prisma.user.delete({ where: { id } });
@@ -175,12 +224,27 @@ export async function deleteUser(fd: FormData): Promise<void> {
 }
 
 export async function setUserStatus(fd: FormData): Promise<void> {
-  await requireAdmin();
+  const me = await requireAdmin();
 
   const id = Number(field(fd, "id"));
   const status = field(fd, "status");
   if (!Number.isInteger(id) || id <= 0) return;
-  if (status !== "PENDING" && status !== "ACTIVE" && status !== "INACTIVE") return;
+  if (status !== "ACTIVE" && status !== "INACTIVE") return;
+
+  const target = await prisma.user.findUnique({ where: { id } });
+  if (!target) return;
+
+  // Un admin no puede auto-inactivarse (quedaría bloqueado de inmediato).
+  if (me.userId === id && status === "INACTIVE") return;
+
+  // Solo un SUPER_ADMIN puede inactivar a otro SUPER_ADMIN, y nunca al último activo.
+  if (target.role === "SUPER_ADMIN" && status === "INACTIVE") {
+    if (me.role !== "SUPER_ADMIN") return;
+    const activeSupers = await prisma.user.count({
+      where: { role: "SUPER_ADMIN", status: "ACTIVE" },
+    });
+    if (activeSupers <= 1) return;
+  }
 
   await prisma.user.update({ where: { id }, data: { status } });
 
@@ -223,22 +287,46 @@ export async function setMatchResult(_prev: ActionState, fd: FormData): Promise<
     return { error: parsed.error.issues[0].message };
   }
 
+  const existing = await prisma.match.findUnique({ where: { id } });
+  if (!existing) {
+    return { error: "El partido no existe." };
+  }
+
+  const { homeScore, awayScore } = parsed.data;
+  const isKnockout = existing.phase !== "GROUP";
+
+  // Determina el ganador (necesario para campeón/subcampeón y eliminatorias).
+  let winnerTeamId: number | null = null;
+  if (status === "FINISHED") {
+    if (homeScore > awayScore) {
+      winnerTeamId = existing.homeTeamId;
+    } else if (awayScore > homeScore) {
+      winnerTeamId = existing.awayTeamId;
+    } else if (isKnockout) {
+      // Empate en eliminatoria: el admin debe indicar el ganador (penales).
+      const winner = field(fd, "winner");
+      if (winner === "home") winnerTeamId = existing.homeTeamId;
+      else if (winner === "away") winnerTeamId = existing.awayTeamId;
+      if (!winnerTeamId) {
+        return {
+          error: "El partido terminó empatado: indica el ganador (definición por penales).",
+        };
+      }
+    }
+  }
+
   const match = await prisma.match.update({
     where: { id },
-    data: {
-      homeScore: parsed.data.homeScore,
-      awayScore: parsed.data.awayScore,
-      status,
-    },
+    data: { homeScore, awayScore, status, winnerTeamId },
   });
 
   // Recalcula puntos para asignar (si FINISHED) o limpiar (si vuelve a no FINISHED).
   await recomputeMatchPoints(id);
-  if (status === "FINISHED" && match.phase === "FINAL") {
+  if (match.phase === "FINAL") {
     await recomputeChampionPoints();
   }
 
-  revalidateAdmin(["/admin/partidos", "/admin/tabla", "/admin"]);
+  revalidateAdmin(["/admin/partidos", "/admin/tabla", "/admin", "/partidos", "/tabla"]);
   return { success: "Resultado guardado correctamente." };
 }
 

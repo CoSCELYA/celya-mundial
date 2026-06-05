@@ -44,6 +44,10 @@ export async function recomputeMatchPoints(matchId: number): Promise<void> {
   if (!match) return;
 
   await prisma.$transaction(async (tx) => {
+    // Serializa recomputes concurrentes del mismo partido (cron + carga manual)
+    // para que dos transacciones no dupliquen entradas de puntos.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
+
     // Clear previous derived points for this match.
     await tx.pointsEntry.deleteMany({ where: { matchId } });
     await tx.prediction.updateMany({
@@ -92,21 +96,35 @@ export async function recomputeChampionPoints(): Promise<void> {
   const final = await prisma.match.findFirst({ where: { phase: "FINAL" } });
 
   await prisma.$transaction(async (tx) => {
+    // Lock fijo para serializar el recálculo global de campeón/subcampeón.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(424242)`;
+
     await tx.pointsEntry.deleteMany({ where: { type: { in: ["CHAMPION", "RUNNERUP"] } } });
     await tx.championPick.updateMany({ data: { championPts: null, runnerUpPts: null } });
+
+    const decided =
+      final !== null &&
+      final.homeScore !== null &&
+      final.awayScore !== null &&
+      (final.homeScore !== final.awayScore || final.winnerTeamId !== null);
 
     const ready =
       final &&
       final.status === "FINISHED" &&
-      final.homeScore !== null &&
-      final.awayScore !== null &&
       final.homeTeamId !== null &&
       final.awayTeamId !== null &&
-      final.homeScore !== final.awayScore;
+      decided;
     if (!ready) return;
 
-    const championId = final.homeScore! > final.awayScore! ? final.homeTeamId! : final.awayTeamId!;
-    const runnerUpId = final.homeScore! > final.awayScore! ? final.awayTeamId! : final.homeTeamId!;
+    // Campeón = ganador de la final. Si el marcador quedó empatado (penales),
+    // se usa el ganador registrado (winnerTeamId).
+    let championId: number;
+    if (final.homeScore! !== final.awayScore!) {
+      championId = final.homeScore! > final.awayScore! ? final.homeTeamId! : final.awayTeamId!;
+    } else {
+      championId = final.winnerTeamId!;
+    }
+    const runnerUpId = championId === final.homeTeamId! ? final.awayTeamId! : final.homeTeamId!;
 
     const picks = await tx.championPick.findMany();
     for (const pick of picks) {

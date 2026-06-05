@@ -95,6 +95,7 @@ export default async function PartidosPage() {
                         <ResultDialog
                           match={{
                             id: m.id,
+                            phase: m.phase,
                             homeName,
                             awayName,
                             homeCode: m.homeTeam?.fifaCode ?? null,

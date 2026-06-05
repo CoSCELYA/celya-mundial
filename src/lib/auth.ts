@@ -49,9 +49,12 @@ export function isAdminRole(role: Role): boolean {
   return ADMIN_ROLES.includes(role);
 }
 
-/** Fetch the full user record for the current session, or null. */
+/** Fetch the user record for the current session (without passwordHash), or null. */
 export async function getCurrentUser() {
   const session = await getSession();
   if (!session) return null;
-  return prisma.user.findUnique({ where: { id: session.userId } });
+  return prisma.user.findUnique({
+    where: { id: session.userId },
+    omit: { passwordHash: true },
+  });
 }

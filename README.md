@@ -5,21 +5,21 @@ trivia de negocio antes de cada partido, ranking, premios y panel de administrac
 
 ## Stack
 - **Next.js 16** (App Router, Server Actions) + **TypeScript** + **React 19**
-- **Tailwind CSS v4** (sistema de diseño celya: claro/oscuro, Poppins)
+- **Tailwind CSS v4** (sistema de diseño celya: tema oscuro, Poppins)
 - **PostgreSQL** + **Prisma 6** (driver adapter `pg`, motor de consultas WASM)
 - Autenticación propia por cookie JWT firmada (`jose` + `bcryptjs`)
 
 ## Roles
 - **SUPER_ADMIN**: todo + configuración de puntaje.
-- **ADMIN**: usuarios, partidos, preguntas, premios, resultados, tabla.
+- **ADMIN**: usuarios, resultados de partidos, preguntas, premios, tabla.
 - **EMPLEADO**: pronósticos, trivia, campeón/subcampeón, sus puntos, tabla, premios.
 
 ## Funcionalidades
 - Login y auto-registro: cualquier correo `@celya.co` se registra y entra de inmediato (el control de participantes es interno).
 - El SUPER_ADMIN/ADMIN puede **inactivar** un usuario (p. ej. si un empleado deja la empresa); el bloqueo es inmediato.
-- Gestión de usuarios, partidos (con carga de resultados), preguntas de trivia (104, se bloquean al ser respondidas) y premios.
-- Pronóstico de marcadores con **gate de trivia** y deadline de 1 hora antes del partido.
-- Selección de campeón/subcampeón (bloqueada al iniciar octavos).
+- Gestión de usuarios, carga de resultados de partidos, preguntas de trivia (104, se bloquean al ser respondidas) y premios.
+- Pronóstico de marcadores con **gate de trivia** y deadline configurable antes del partido (1 h por defecto).
+- Selección de campeón/subcampeón (bloqueada al iniciar la fase configurada, octavos por defecto).
 - Cálculo automático de puntos: marcador exacto, resultado, trivia, campeón y subcampeón (configurable).
 - Tabla de posiciones y detalle de puntos.
 
@@ -56,7 +56,7 @@ las eliminatorias y los marcadores se traen automáticamente de [football-data.o
 ## Despliegue en Railway
 1. Crea un proyecto en Railway y añade el plugin **PostgreSQL** (define `DATABASE_URL`).
 2. Conecta este repositorio como servicio web.
-3. Define las variables de entorno (ver `.env.example`): `AUTH_SECRET`, `APP_URL`,
+3. Define las variables de entorno (ver `.env.example`): `AUTH_SECRET`,
    `ALLOWED_EMAIL_DOMAIN`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, y opcionalmente `FOOTBALL_DATA_TOKEN`/`CRON_SECRET`.
 4. El build corre `prisma generate && next build`; el arranque corre `prisma migrate deploy && next start`
    (aplica las migraciones de `prisma/migrations`).

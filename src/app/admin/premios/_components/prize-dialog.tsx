@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { Pencil, Plus, X } from "lucide-react";
 import { createPrize, updatePrize } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
@@ -29,10 +29,12 @@ export function PrizeDialog({ prize }: Props) {
   const [open, setOpen] = useState(false);
   const [state, formAction] = useActionState(action, null);
 
-  // Cierra el diálogo cuando la acción termina con éxito.
-  useEffect(() => {
+  // Cierra el diálogo cuando la acción termina con éxito (estado derivado, sin efecto).
+  const [handled, setHandled] = useState(state);
+  if (state !== handled) {
+    setHandled(state);
     if (state?.success) setOpen(false);
-  }, [state]);
+  }
 
   return (
     <>
