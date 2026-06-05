@@ -6,6 +6,7 @@ import { StatusBadge, Badge } from "@/components/ui/badge";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { ROLE_LABEL } from "@/lib/constants";
 import { NewUserButton, EditUserButton } from "./_components/user-actions";
+import { ResetPasswordButton } from "./_components/password-dialog";
 
 const TH =
   "px-4 py-3 text-left text-[11px] uppercase tracking-wide text-muted-foreground font-semibold";
@@ -109,6 +110,13 @@ export default async function UsuariosPage() {
                             </SubmitButton>
                           </form>
                         ))}
+                      <ResetPasswordButton
+                        user={{
+                          id: user.id,
+                          fullName: user.fullName,
+                          email: user.email,
+                        }}
+                      />
                       <EditUserButton
                         user={{
                           id: user.id,

@@ -130,6 +130,33 @@ export async function updateUser(_prev: ActionState, fd: FormData): Promise<Acti
   return { success: "Usuario actualizado correctamente." };
 }
 
+// Restablecer la contraseña de un usuario (cuando la olvida). Solo admins.
+export async function resetUserPassword(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireAdmin();
+
+  const id = Number(field(fd, "id"));
+  if (!Number.isInteger(id) || id <= 0) {
+    return { error: "Usuario inválido." };
+  }
+
+  const password = field(fd, "password");
+  if (password.length < 6) {
+    return { error: "La contraseña debe tener al menos 6 caracteres." };
+  }
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) {
+    return { error: "El usuario no existe." };
+  }
+
+  await prisma.user.update({
+    where: { id },
+    data: { passwordHash: await hashPassword(password) },
+  });
+
+  return { success: `Contraseña actualizada para ${user.email}.` };
+}
+
 export async function deleteUser(fd: FormData): Promise<void> {
   await requireAdmin();
 
