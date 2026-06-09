@@ -39,7 +39,7 @@ export const userUpsertSchema = z.object({
   fullName: z.string().min(3),
   email: z.string().email(),
   documento: z.string().optional(),
-  role: z.enum(["SUPER_ADMIN", "ADMIN", "EMPLEADO"]),
+  role: z.enum(["SUPER_ADMIN", "EMPLEADO"]),
   status: z.enum(["ACTIVE", "INACTIVE"]),
 });
 

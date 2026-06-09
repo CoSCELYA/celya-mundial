@@ -4,7 +4,8 @@ import type { Role } from "@prisma/client";
 import { getSession, type SessionPayload } from "@/lib/session";
 import { prisma } from "@/lib/db";
 
-const ADMIN_ROLES: Role[] = ["ADMIN", "SUPER_ADMIN"];
+// El único rol administrador es SUPER_ADMIN; el resto son empleados.
+const ADMIN_ROLES: Role[] = ["SUPER_ADMIN"];
 
 /**
  * Require an authenticated, ACTIVE session. Validates status/role against the
@@ -31,7 +32,7 @@ export async function requireSession(): Promise<SessionPayload> {
   };
 }
 
-/** Require an admin-level session (ADMIN or SUPER_ADMIN). */
+/** Require an admin-level session (SUPER_ADMIN). */
 export async function requireAdmin(): Promise<SessionPayload> {
   const session = await requireSession();
   if (!ADMIN_ROLES.includes(session.role)) redirect("/");

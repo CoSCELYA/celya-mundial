@@ -17,6 +17,5 @@ export const PHASE_ORDER: Phase[] = ["GROUP", "R32", "R16", "QF", "SF", "THIRD",
 
 export const ROLE_LABEL: Record<string, string> = {
   SUPER_ADMIN: "Super Admin",
-  ADMIN: "Administrador",
   EMPLEADO: "Empleado",
 };

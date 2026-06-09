@@ -53,9 +53,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Admin area requires an admin role.
+  // Admin area requires the SUPER_ADMIN role (único administrador).
   if (pathname.startsWith("/admin")) {
-    if (session.role !== "ADMIN" && session.role !== "SUPER_ADMIN") {
+    if (session.role !== "SUPER_ADMIN") {
       const url = req.nextUrl.clone();
       url.pathname = "/";
       return NextResponse.redirect(url);
