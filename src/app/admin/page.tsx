@@ -84,9 +84,9 @@ export default async function AdminDashboardPage() {
         <StatCard label="Total preguntas" value={totalQuestions} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Upcoming matches */}
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Próximos partidos</CardTitle>
           </CardHeader>
