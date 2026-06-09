@@ -1,6 +1,8 @@
 import { Check, Lock, Plus } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
+import { getScoringConfig } from "@/lib/scoring";
+import { isPredictionOpen } from "@/lib/dates";
 import { PHASE_LABEL } from "@/lib/constants";
 import { Card } from "@/components/ui/card";
 import { Badge, StatusBadge } from "@/components/ui/badge";
@@ -17,7 +19,7 @@ function matchTeams(home?: { name: string } | null, away?: { name: string } | nu
 export default async function PreguntasPage() {
   await requireAdmin();
 
-  const [questions, matches] = await Promise.all([
+  const [questions, matches, cfg] = await Promise.all([
     prisma.question.findMany({
       include: {
         match: { include: { homeTeam: true, awayTeam: true } },
@@ -28,6 +30,7 @@ export default async function PreguntasPage() {
       include: { homeTeam: true, awayTeam: true },
       orderBy: { kickoffAt: "asc" },
     }),
+    getScoringConfig(),
   ]);
 
   const matchOptions = matches.map((m) => ({
@@ -41,8 +44,8 @@ export default async function PreguntasPage() {
         <div>
           <h1 className="text-xl font-semibold">Preguntas de trivia</h1>
           <p className="text-sm text-muted-foreground">
-            Una pregunta por partido. Si ya fue respondida queda bloqueada y no
-            se puede editar ni eliminar.
+            Una pregunta por partido. Se puede editar hasta que cierre el plazo
+            de pronóstico del partido; después queda bloqueada.
           </p>
         </div>
         <QuestionDialog
@@ -82,7 +85,8 @@ export default async function PreguntasPage() {
               )}
 
               {questions.map((q) => {
-                const locked = q.lockedAt !== null;
+                // Editable mientras el partido no haya cerrado su plazo de pronóstico.
+                const locked = !isPredictionOpen(q.match.kickoffAt, cfg.lockMinutes);
                 return (
                   <tr key={q.id} className="border-b border-border align-top">
                     <td className="px-4 py-3 tnum text-muted-foreground">

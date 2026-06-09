@@ -11,8 +11,8 @@ export type ActionState = { error?: string; success?: string } | null;
 
 /**
  * Registra la respuesta de trivia del empleado para el partido indicado.
- * Crea (o actualiza) el QuestionAnswer único por [userId, questionId], calcula
- * si la respuesta es correcta y bloquea la pregunta en su primera respuesta global.
+ * Crea (o actualiza) el QuestionAnswer único por [userId, questionId] y calcula
+ * si la respuesta es correcta. Editable hasta el cierre del plazo del partido.
  */
 export async function answerTrivia(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const s = await requireSession();
@@ -42,24 +42,17 @@ export async function answerTrivia(_prev: ActionState, fd: FormData): Promise<Ac
 
   const isCorrect = selectedOption === question.correctOption;
 
-  await prisma.$transaction(async (tx) => {
-    await tx.questionAnswer.upsert({
-      where: { userId_questionId: { userId: s.userId, questionId: question.id } },
-      update: { selectedOption, isCorrect },
-      create: {
-        userId: s.userId,
-        questionId: question.id,
-        selectedOption,
-        isCorrect,
-      },
-    });
-
-    if (!question.lockedAt) {
-      await tx.question.update({
-        where: { id: question.id },
-        data: { lockedAt: new Date() },
-      });
-    }
+  // Las respuestas se pueden cambiar hasta el cierre del plazo (deadline) del
+  // partido; el bloqueo de edición admin también se rige por ese plazo.
+  await prisma.questionAnswer.upsert({
+    where: { userId_questionId: { userId: s.userId, questionId: question.id } },
+    update: { selectedOption, isCorrect },
+    create: {
+      userId: s.userId,
+      questionId: question.id,
+      selectedOption,
+      isCorrect,
+    },
   });
 
   revalidatePath(`/partidos/${matchId}`);

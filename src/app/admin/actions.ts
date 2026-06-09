@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
-import { recomputeMatchPoints, recomputeChampionPoints } from "@/lib/scoring";
+import { recomputeMatchPoints, recomputeChampionPoints, getScoringConfig } from "@/lib/scoring";
+import { isPredictionOpen } from "@/lib/dates";
 import { syncWorldCup } from "@/lib/football-data";
 import {
   userUpsertSchema,
@@ -378,12 +379,18 @@ export async function updateQuestion(_prev: ActionState, fd: FormData): Promise<
     return { error: "Pregunta inválida." };
   }
 
-  const current = await prisma.question.findUnique({ where: { id } });
+  const current = await prisma.question.findUnique({
+    where: { id },
+    include: { match: true },
+  });
   if (!current) {
     return { error: "La pregunta no existe." };
   }
-  if (current.lockedAt) {
-    return { error: "La pregunta ya fue respondida y está bloqueada." };
+
+  // Se puede editar mientras el partido no haya cerrado su plazo de pronóstico.
+  const cfg = await getScoringConfig();
+  if (!isPredictionOpen(current.match.kickoffAt, cfg.lockMinutes)) {
+    return { error: "El plazo del partido ya cerró; la pregunta no se puede editar." };
   }
 
   const parsed = questionUpsertSchema.safeParse({
@@ -411,6 +418,17 @@ export async function updateQuestion(_prev: ActionState, fd: FormData): Promise<
     },
   });
 
+  // Re-califica las respuestas existentes contra la nueva respuesta correcta
+  // (mantiene consistente el puntaje de trivia cuando el partido finalice).
+  await prisma.questionAnswer.updateMany({
+    where: { questionId: id, selectedOption: parsed.data.correctOption },
+    data: { isCorrect: true },
+  });
+  await prisma.questionAnswer.updateMany({
+    where: { questionId: id, selectedOption: { not: parsed.data.correctOption } },
+    data: { isCorrect: false },
+  });
+
   revalidateAdmin(["/admin/preguntas", "/admin"]);
   return { success: "Pregunta actualizada correctamente." };
 }
@@ -421,9 +439,14 @@ export async function deleteQuestion(fd: FormData): Promise<void> {
   const id = Number(field(fd, "id"));
   if (!Number.isInteger(id) || id <= 0) return;
 
-  const current = await prisma.question.findUnique({ where: { id } });
-  // Guard: a locked (already answered) question cannot be deleted.
-  if (!current || current.lockedAt) return;
+  const current = await prisma.question.findUnique({
+    where: { id },
+    include: { match: true },
+  });
+  if (!current) return;
+  // No se puede eliminar si el plazo del partido ya cerró.
+  const cfg = await getScoringConfig();
+  if (!isPredictionOpen(current.match.kickoffAt, cfg.lockMinutes)) return;
 
   await prisma.question.delete({ where: { id } });
 
