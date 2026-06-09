@@ -22,8 +22,9 @@ export type UserFormData = {
 };
 
 const ROLES = ["SUPER_ADMIN", "EMPLEADO"] as const;
-const STATUSES = ["ACTIVE", "INACTIVE"] as const;
+const STATUSES = ["PENDING", "ACTIVE", "INACTIVE"] as const;
 const STATUS_LABEL: Record<string, string> = {
+  PENDING: "Pendiente",
   ACTIVE: "Activo",
   INACTIVE: "Inactivo",
 };
@@ -106,7 +107,7 @@ export function UserDialog({
               type="email"
               required
               defaultValue={user?.email ?? ""}
-              placeholder="correo@celya.co"
+              placeholder="correo@dominio.com"
             />
           </div>
 

@@ -22,8 +22,11 @@ export async function loginAction(_prev: ActionState, formData: FormData): Promi
   if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
     return { error: "Correo o contraseña incorrectos." };
   }
+  if (user.status === "PENDING") {
+    return { error: "Tu cuenta está pendiente de aprobación por un administrador." };
+  }
   if (user.status !== "ACTIVE") {
-    return { error: "Tu cuenta no está activa. Contacta al administrador." };
+    return { error: "Tu cuenta está inactiva. Contacta al administrador." };
   }
 
   await setSessionCookie({
@@ -54,27 +57,22 @@ export async function registerAction(_prev: ActionState, formData: FormData): Pr
     return { error: "Ya existe una cuenta con este correo." };
   }
 
-  const user = await prisma.user.create({
+  await prisma.user.create({
     data: {
       fullName: parsed.data.fullName,
       documento: parsed.data.documento || null,
       email,
       passwordHash: await hashPassword(parsed.data.password),
       role: "EMPLEADO",
-      status: "ACTIVE",
+      status: "PENDING",
     },
   });
 
-  // Acceso inmediato: el control de quién participa es interno (dominio @celya.co).
-  await setSessionCookie({
-    userId: user.id,
-    role: user.role,
-    status: user.status,
-    name: user.fullName,
-    email: user.email,
-  });
-
-  redirect("/");
+  // La cuenta queda pendiente: un administrador debe aprobarla antes de ingresar.
+  return {
+    success:
+      "Tu registro fue recibido. Un administrador debe aprobar tu cuenta antes de que puedas ingresar.",
+  };
 }
 
 export async function logoutAction(): Promise<void> {

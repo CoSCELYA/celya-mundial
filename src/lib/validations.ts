@@ -1,27 +1,15 @@
 import { z } from "zod";
 
-// Uno o varios dominios permitidos, separados por coma (ej: "celya.co,bpoti.com").
-const allowedDomains = (process.env.ALLOWED_EMAIL_DOMAIN ?? "celya.co")
-  .split(",")
-  .map((d) => d.trim().toLowerCase())
-  .filter(Boolean);
-
 export const loginSchema = z.object({
   email: z.string().email("Correo inválido"),
   password: z.string().min(1, "Ingresa tu contraseña"),
 });
 
+// Registro abierto: cualquier correo válido (el admin aprueba cada cuenta).
 export const registerSchema = z.object({
   fullName: z.string().min(3, "Ingresa tu nombre completo"),
   documento: z.string().optional(),
-  email: z
-    .string()
-    .email("Correo inválido")
-    .refine((e) => allowedDomains.some((d) => e.toLowerCase().endsWith(`@${d}`)), {
-      message: `El correo debe ser de un dominio autorizado (${allowedDomains
-        .map((d) => `@${d}`)
-        .join(", ")})`,
-    }),
+  email: z.string().email("Correo inválido"),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres"),
 });
 
@@ -40,7 +28,7 @@ export const userUpsertSchema = z.object({
   email: z.string().email(),
   documento: z.string().optional(),
   role: z.enum(["SUPER_ADMIN", "EMPLEADO"]),
-  status: z.enum(["ACTIVE", "INACTIVE"]),
+  status: z.enum(["PENDING", "ACTIVE", "INACTIVE"]),
 });
 
 export const matchUpsertSchema = z.object({

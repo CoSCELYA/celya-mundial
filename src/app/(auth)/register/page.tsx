@@ -15,7 +15,8 @@ export default function RegisterPage() {
     <Card className="p-6">
       <h1 className="mb-1 text-xl font-semibold">Crear cuenta</h1>
       <p className="mb-5 text-sm text-muted-foreground">
-        Regístrate con tu correo corporativo autorizado.
+        Regístrate con tu correo. Un administrador debe aprobar tu cuenta antes
+        de que puedas ingresar.
       </p>
       <form action={action} className="space-y-4">
         <FormMessage state={state} />

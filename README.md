@@ -15,8 +15,8 @@ trivia de negocio antes de cada partido, ranking, premios y panel de administrac
 - **EMPLEADO**: pronósticos, trivia, campeón/subcampeón, sus puntos, tabla, premios.
 
 ## Funcionalidades
-- Login y auto-registro: cualquier correo `@celya.co` se registra y entra de inmediato (el control de participantes es interno).
-- El SUPER_ADMIN/ADMIN puede **inactivar** un usuario (p. ej. si un empleado deja la empresa); el bloqueo es inmediato.
+- Registro abierto a cualquier correo. La cuenta queda **pendiente** hasta que un administrador la apruebe; antes de aprobarse, el login muestra "pendiente de aprobación".
+- El administrador puede **aprobar**, **inactivar** o reactivar un usuario; los cambios de estado son inmediatos.
 - Gestión de usuarios, carga de resultados de partidos, preguntas de trivia (104, se bloquean al ser respondidas) y premios.
 - Pronóstico de marcadores con **gate de trivia** y deadline configurable antes del partido (1 h por defecto).
 - Selección de campeón/subcampeón (bloqueada al iniciar la fase configurada, octavos por defecto).
@@ -57,7 +57,7 @@ las eliminatorias y los marcadores se traen automáticamente de [football-data.o
 1. Crea un proyecto en Railway y añade el plugin **PostgreSQL** (define `DATABASE_URL`).
 2. Conecta este repositorio como servicio web.
 3. Define las variables de entorno (ver `.env.example`): `AUTH_SECRET`,
-   `ALLOWED_EMAIL_DOMAIN`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, y opcionalmente `FOOTBALL_DATA_TOKEN`/`CRON_SECRET`.
+   `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD`, y opcionalmente `FOOTBALL_DATA_TOKEN`/`CRON_SECRET`.
 4. El build corre `prisma generate && next build`; el arranque corre `prisma migrate deploy && next start`
    (aplica las migraciones de `prisma/migrations`).
 5. Tras el primer despliegue, ejecuta el seed una vez (Railway → comando puntual):

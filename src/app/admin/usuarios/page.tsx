@@ -104,9 +104,13 @@ export default async function UsuariosPage() {
                           <form action={setUserStatus}>
                             <input type="hidden" name="id" value={user.id} />
                             <input type="hidden" name="status" value="ACTIVE" />
-                            <SubmitButton variant="secondary" size="sm" title="Activar usuario">
+                            <SubmitButton
+                              variant={user.status === "PENDING" ? "primary" : "secondary"}
+                              size="sm"
+                              title={user.status === "PENDING" ? "Aprobar usuario" : "Activar usuario"}
+                            >
                               <UserCheck />
-                              Activar
+                              {user.status === "PENDING" ? "Aprobar" : "Activar"}
                             </SubmitButton>
                           </form>
                         ))}

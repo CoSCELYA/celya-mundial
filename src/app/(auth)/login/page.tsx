@@ -32,7 +32,7 @@ export default function LoginPage() {
       <p className="mt-4 text-center text-sm text-muted-foreground">
         ¿No tienes cuenta?{" "}
         <Link href="/register" className="font-medium text-foreground hover:underline">
-          Regístrate con tu correo corporativo
+          Regístrate
         </Link>
       </p>
     </Card>
