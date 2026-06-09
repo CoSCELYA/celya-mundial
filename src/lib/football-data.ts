@@ -49,6 +49,29 @@ export function isSyncConfigured(): boolean {
   return Boolean(process.env.FOOTBALL_DATA_TOKEN);
 }
 
+/**
+ * ¿Hay algún partido en curso o por empezar? Se usa para que el cron solo
+ * consulte la API cuando vale la pena: desde 15 min antes del kickoff hasta
+ * ~4 h después (cubre prórroga, penales y demoras), o si ya está en juego.
+ * Cuando no hay ventana activa, el cron no gasta peticiones a football-data.
+ */
+export async function hasActiveMatchWindow(now: Date = new Date()): Promise<boolean> {
+  const LEAD_MS = 15 * 60_000; // empieza un poco antes del kickoff
+  const TAIL_MS = 4 * 60 * 60_000; // sigue un buen rato después por si acaso
+  const from = new Date(now.getTime() - TAIL_MS);
+  const to = new Date(now.getTime() + LEAD_MS);
+
+  const count = await prisma.match.count({
+    where: {
+      OR: [
+        { status: "LIVE" },
+        { status: { not: "FINISHED" }, kickoffAt: { gte: from, lte: to } },
+      ],
+    },
+  });
+  return count > 0;
+}
+
 function normalize(s: string): string {
   return s
     .toLowerCase()
