@@ -2,7 +2,7 @@ import { Trophy } from "lucide-react";
 
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { formatDateTime } from "@/lib/dates";
+import { LocalTime } from "@/components/local-time";
 import { PHASE_LABEL } from "@/lib/constants";
 import { isSyncConfigured } from "@/lib/football-data";
 
@@ -62,7 +62,7 @@ export default async function PartidosPage() {
                   return (
                     <tr key={m.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                       <td className={`${TD} whitespace-nowrap text-muted-foreground`}>
-                        {formatDateTime(m.kickoffAt)}
+                        <LocalTime value={m.kickoffAt} />
                         {m.venue ? (
                           <div className="text-[11px] text-muted-foreground/80">{m.venue}</div>
                         ) : null}

@@ -7,6 +7,7 @@ import { Input, Label } from "@/components/ui/input";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { FormMessage } from "@/components/form-message";
 import { Flag } from "@/components/flag";
+import { LocalTime } from "@/components/local-time";
 
 export function ScoreForm({
   matchId,
@@ -16,7 +17,7 @@ export function ScoreForm({
   awayCode,
   homeScore,
   awayScore,
-  deadlineLabel,
+  deadline,
 }: {
   matchId: number;
   homeName: string;
@@ -25,7 +26,7 @@ export function ScoreForm({
   awayCode: string | null;
   homeScore: number | null;
   awayScore: number | null;
-  deadlineLabel: string;
+  deadline: number;
 }) {
   const router = useRouter();
   const [state, formAction] = useActionState<ActionState, FormData>(savePrediction, null);
@@ -46,7 +47,7 @@ export function ScoreForm({
           Ingreso de marcador
         </p>
         <p className="mt-1 text-xs text-white/60">
-          Puedes editar tu pronóstico hasta {deadlineLabel}.
+          Puedes editar tu pronóstico hasta <LocalTime value={deadline} />.
         </p>
       </div>
 

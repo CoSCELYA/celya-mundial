@@ -1,7 +1,7 @@
 import { requireSession } from "@/lib/auth";
 import { getUserSummary } from "@/lib/queries";
-import { formatDate } from "@/lib/dates";
 import { Flag } from "@/components/flag";
+import { LocalTime } from "@/components/local-time";
 import type { PointsType } from "@prisma/client";
 
 export const metadata = {
@@ -138,7 +138,7 @@ export default async function MisPuntosPage() {
 
                   <div className="flex items-center justify-between gap-4 sm:justify-end">
                     <span className="text-xs text-white/50">
-                      {formatDate(entry.createdAt)}
+                      <LocalTime value={entry.createdAt} mode="date" />
                     </span>
                     <span className="tnum text-lg font-bold text-accent">
                       +{entry.points}

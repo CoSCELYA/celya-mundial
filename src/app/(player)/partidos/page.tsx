@@ -3,10 +3,11 @@ import type { Match, Prediction, Team } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getScoringConfig } from "@/lib/scoring";
-import { formatDateTime, isPredictionOpen } from "@/lib/dates";
+import { isPredictionOpen } from "@/lib/dates";
 import { PHASE_ORDER, PHASE_LABEL } from "@/lib/constants";
 import { CalendarDays, Lock, PencilLine, ArrowRight } from "lucide-react";
 import { Flag } from "@/components/flag";
+import { LocalTime } from "@/components/local-time";
 
 type MatchWithTeams = Match & {
   homeTeam: Team | null;
@@ -119,7 +120,7 @@ function MatchCard({
 
       <div className="flex items-center gap-1.5 text-xs text-white/60">
         <CalendarDays className="size-3.5 shrink-0" />
-        <span>{formatDateTime(match.kickoffAt)}</span>
+        <span><LocalTime value={match.kickoffAt} /></span>
       </div>
 
       {finished && hasRealScore && (

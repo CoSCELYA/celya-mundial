@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getStandings } from "@/lib/queries";
-import { formatDateTime } from "@/lib/dates";
+import { LocalTime } from "@/components/local-time";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Flag } from "@/components/flag";
 import { cn } from "@/lib/cn";
@@ -110,7 +110,7 @@ export default async function AdminDashboardPage() {
                       </span>
                     </div>
                     <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {formatDateTime(match.kickoffAt)}
+                      <LocalTime value={match.kickoffAt} />
                     </span>
                   </li>
                 ))}

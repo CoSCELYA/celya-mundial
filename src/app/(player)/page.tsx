@@ -3,9 +3,10 @@ import { Trophy, Medal, CalendarClock, ArrowRight } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getUserSummary, getChampionPick, getScoringConfig } from "@/lib/queries";
-import { isPredictionOpen, formatDateTime } from "@/lib/dates";
+import { isPredictionOpen } from "@/lib/dates";
 import { PHASE_LABEL } from "@/lib/constants";
 import { Flag } from "@/components/flag";
+import { LocalTime } from "@/components/local-time";
 
 export default async function PlayerHomePage() {
   const s = await requireSession();
@@ -144,7 +145,7 @@ export default async function PlayerHomePage() {
                       {PHASE_LABEL[m.phase]}
                       {m.groupName ? ` · Grupo ${m.groupName}` : ""}
                     </span>
-                    <span className="tnum">{formatDateTime(m.kickoffAt)}</span>
+                    <span className="tnum"><LocalTime value={m.kickoffAt} /></span>
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-2 text-sm font-semibold">

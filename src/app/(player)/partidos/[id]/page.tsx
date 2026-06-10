@@ -4,9 +4,10 @@ import { ArrowLeft, CalendarDays, MapPin, Lock, CheckCircle2, XCircle } from "lu
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getScoringConfig } from "@/lib/scoring";
-import { formatDateTime, isPredictionOpen, predictionDeadline } from "@/lib/dates";
+import { isPredictionOpen, predictionDeadline } from "@/lib/dates";
 import { PHASE_LABEL } from "@/lib/constants";
 import { Flag } from "@/components/flag";
+import { LocalTime } from "@/components/local-time";
 import { TriviaForm } from "./_components/trivia-form";
 import { ScoreForm } from "./_components/score-form";
 
@@ -58,7 +59,7 @@ export default async function PartidoDetallePage({
       ? `Grupo ${match.groupName}`
       : PHASE_LABEL[match.phase];
 
-  const deadlineLabel = formatDateTime(predictionDeadline(match.kickoffAt, cfg.lockMinutes));
+  const deadline = predictionDeadline(match.kickoffAt, cfg.lockMinutes);
   const teamsDefined = Boolean(match.homeTeam && match.awayTeam);
   const readOnly = !open || finished;
 
@@ -103,7 +104,7 @@ export default async function PartidoDetallePage({
         <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-white/60">
           <span className="inline-flex items-center gap-1.5">
             <CalendarDays className="size-3.5" />
-            {formatDateTime(match.kickoffAt)}
+            <LocalTime value={match.kickoffAt} />
           </span>
           {match.venue && (
             <span className="inline-flex items-center gap-1.5">
@@ -146,7 +147,7 @@ export default async function PartidoDetallePage({
             awayCode={awayCode}
             homeScore={prediction?.homeScore ?? null}
             awayScore={prediction?.awayScore ?? null}
-            deadlineLabel={deadlineLabel}
+            deadline={deadline.getTime()}
           />
         </div>
       )}
