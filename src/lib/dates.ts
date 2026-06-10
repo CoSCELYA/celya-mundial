@@ -1,28 +1,45 @@
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
-
+// Formato de fechas en hora de Colombia (America/Bogota), robusto sin importar
+// la zona horaria del servidor. Para hora local del visitante, ver el
+// componente cliente <LocalTime>.
 const TZ = "America/Bogota";
+const LOCALE = "es-CO";
 
-/** Format a date in Colombian timezone with the given pattern. */
-function inTz(date: Date): Date {
-  // Render the instant as it appears in America/Bogota.
-  const s = date.toLocaleString("en-US", { timeZone: TZ });
-  return new Date(s);
+const dateFmt = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: TZ,
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+const timeFmt = new Intl.DateTimeFormat(LOCALE, {
+  timeZone: TZ,
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+
+function asDate(date: Date | string): Date {
+  return typeof date === "string" ? new Date(date) : date;
+}
+
+// Ensambla "11 jun 2026" (sin los "de" que agrega el locale es-CO).
+function compactDate(d: Date): string {
+  const parts = dateFmt.formatToParts(d);
+  const get = (t: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === t)?.value ?? "";
+  return `${get("day")} ${get("month")} ${get("year")}`;
 }
 
 export function formatDateTime(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return format(inTz(d), "d MMM yyyy · h:mm a", { locale: es });
+  const d = asDate(date);
+  return `${compactDate(d)} · ${timeFmt.format(d)}`;
 }
 
 export function formatDate(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return format(inTz(d), "d MMM yyyy", { locale: es });
+  return compactDate(asDate(date));
 }
 
 export function formatTime(date: Date | string): string {
-  const d = typeof date === "string" ? new Date(date) : date;
-  return format(inTz(d), "h:mm a", { locale: es });
+  return timeFmt.format(asDate(date));
 }
 
 /** Deadline = kickoff minus lockMinutes. */
