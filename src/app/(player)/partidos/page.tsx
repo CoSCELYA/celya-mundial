@@ -123,9 +123,9 @@ function MatchCard({
         <span><LocalTime value={match.kickoffAt} /></span>
       </div>
 
-      {finished && hasRealScore && (
+      {hasRealScore && (
         <ScoreRow
-          label="Resultado"
+          label={finished ? "Resultado final" : "Marcador registrado"}
           home={match.homeScore as number}
           away={match.awayScore as number}
           accent

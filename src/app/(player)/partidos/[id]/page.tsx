@@ -85,7 +85,7 @@ export default async function PartidoDetallePage({
             <span className="text-sm font-semibold text-white">{homeName}</span>
           </div>
           <div className="px-2">
-            {finished && hasRealScore ? (
+            {hasRealScore ? (
               <span className="tnum text-3xl font-bold text-accent">
                 {match.homeScore} - {match.awayScore}
               </span>
@@ -181,10 +181,10 @@ function ReadOnlyView({
           : "El tiempo para pronosticar este partido cerró."}
       </div>
 
-      {finished && hasRealScore && (
+      {hasRealScore && (
         <div className="rounded-xl border border-white/10 bg-white/5 p-5 backdrop-blur">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-white/60">
-            Resultado final
+            {finished ? "Resultado final" : "Marcador registrado"}
           </p>
           <p className="tnum text-2xl font-bold text-accent">
             {homeScore} - {awayScore}
