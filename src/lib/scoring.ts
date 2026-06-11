@@ -43,83 +43,86 @@ export function predictionPoints(
 export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMatchPointsResult> {
   const cfg = await getScoringConfig();
 
-  return prisma.$transaction(async (tx) => {
-    // Serializa recomputes concurrentes del mismo partido (cron + carga manual)
-    // para que dos transacciones no dupliquen entradas de puntos.
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
+  return prisma.$transaction(
+    async (tx) => {
+      // Serializa recomputes concurrentes del mismo partido (cron + carga manual)
+      // para que dos transacciones no dupliquen entradas de puntos.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
 
-    const match = await tx.match.findUnique({
-      where: { id: matchId },
-      include: {
-        predictions: true,
-        question: { include: { answers: true } },
-      },
-    });
-    if (!match) {
-      return {
-        hasScore: false,
-        predictionsScored: 0,
-        pointsEntriesCreated: 0,
-        totalPointsCreated: 0,
-      };
-    }
-
-    // Clear previous derived points for this match.
-    await tx.pointsEntry.deleteMany({ where: { matchId } });
-    await tx.prediction.updateMany({
-      where: { matchId },
-      data: { pointsAwarded: null, scoredAt: null },
-    });
-
-    const hasScore = match.homeScore !== null && match.awayScore !== null;
-    if (!hasScore) {
-      return {
-        hasScore: false,
-        predictionsScored: 0,
-        pointsEntriesCreated: 0,
-        totalPointsCreated: 0,
-      };
-    }
-
-    const real = { homeScore: match.homeScore!, awayScore: match.awayScore! };
-    let pointsEntriesCreated = 0;
-    let totalPointsCreated = 0;
-
-    for (const pred of match.predictions) {
-      const { points, type } = predictionPoints(pred, real, cfg);
-      await tx.prediction.update({
-        where: { id: pred.id },
-        data: { pointsAwarded: points, scoredAt: new Date() },
+      const match = await tx.match.findUnique({
+        where: { id: matchId },
+        include: {
+          predictions: true,
+          question: { include: { answers: true } },
+        },
       });
-      if (points > 0 && type) {
-        await tx.pointsEntry.create({
-          data: { userId: pred.userId, matchId, type, points },
-        });
-        pointsEntriesCreated++;
-        totalPointsCreated += points;
+      if (!match) {
+        return {
+          hasScore: false,
+          predictionsScored: 0,
+          pointsEntriesCreated: 0,
+          totalPointsCreated: 0,
+        };
       }
-    }
 
-    // Trivia points for correct answers to this match's question.
-    if (match.question) {
-      for (const ans of match.question.answers) {
-        if (ans.isCorrect) {
+      // Clear previous derived points for this match.
+      await tx.pointsEntry.deleteMany({ where: { matchId } });
+      await tx.prediction.updateMany({
+        where: { matchId },
+        data: { pointsAwarded: null, scoredAt: null },
+      });
+
+      const hasScore = match.homeScore !== null && match.awayScore !== null;
+      if (!hasScore) {
+        return {
+          hasScore: false,
+          predictionsScored: 0,
+          pointsEntriesCreated: 0,
+          totalPointsCreated: 0,
+        };
+      }
+
+      const real = { homeScore: match.homeScore!, awayScore: match.awayScore! };
+      let pointsEntriesCreated = 0;
+      let totalPointsCreated = 0;
+
+      for (const pred of match.predictions) {
+        const { points, type } = predictionPoints(pred, real, cfg);
+        await tx.prediction.update({
+          where: { id: pred.id },
+          data: { pointsAwarded: points, scoredAt: new Date() },
+        });
+        if (points > 0 && type) {
           await tx.pointsEntry.create({
-            data: { userId: ans.userId, matchId, type: "TRIVIA", points: cfg.triviaPts },
+            data: { userId: pred.userId, matchId, type, points },
           });
           pointsEntriesCreated++;
-          totalPointsCreated += cfg.triviaPts;
+          totalPointsCreated += points;
         }
       }
-    }
 
-    return {
-      hasScore: true,
-      predictionsScored: match.predictions.length,
-      pointsEntriesCreated,
-      totalPointsCreated,
-    };
-  });
+      // Trivia points for correct answers to this match's question.
+      if (match.question) {
+        for (const ans of match.question.answers) {
+          if (ans.isCorrect) {
+            await tx.pointsEntry.create({
+              data: { userId: ans.userId, matchId, type: "TRIVIA", points: cfg.triviaPts },
+            });
+            pointsEntriesCreated++;
+            totalPointsCreated += cfg.triviaPts;
+          }
+        }
+      }
+
+      return {
+        hasScore: true,
+        predictionsScored: match.predictions.length,
+        pointsEntriesCreated,
+        totalPointsCreated,
+      };
+    },
+    { maxWait: 20_000, timeout: 20_000 },
+  );
 }
 
 /**
