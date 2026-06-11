@@ -42,26 +42,27 @@ export function predictionPoints(
  */
 export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMatchPointsResult> {
   const cfg = await getScoringConfig();
-  const match = await prisma.match.findUnique({
-    where: { id: matchId },
-    include: {
-      predictions: true,
-      question: { include: { answers: true } },
-    },
-  });
-  if (!match) {
-    return {
-      hasScore: false,
-      predictionsScored: 0,
-      pointsEntriesCreated: 0,
-      totalPointsCreated: 0,
-    };
-  }
 
   return prisma.$transaction(async (tx) => {
     // Serializa recomputes concurrentes del mismo partido (cron + carga manual)
     // para que dos transacciones no dupliquen entradas de puntos.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
+
+    const match = await tx.match.findUnique({
+      where: { id: matchId },
+      include: {
+        predictions: true,
+        question: { include: { answers: true } },
+      },
+    });
+    if (!match) {
+      return {
+        hasScore: false,
+        predictionsScored: 0,
+        pointsEntriesCreated: 0,
+        totalPointsCreated: 0,
+      };
+    }
 
     // Clear previous derived points for this match.
     await tx.pointsEntry.deleteMany({ where: { matchId } });

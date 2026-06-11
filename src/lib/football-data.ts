@@ -11,6 +11,7 @@ import {
 // Competicion FIFA World Cup => code "WC".
 const BASE = "https://api.football-data.org/v4";
 const COMPETITION = "WC";
+const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world";
 
 const ACTIVE_LEAD_MS = 15 * 60_000;
 const ACTIVE_TAIL_MS = 4 * 60 * 60_000;
@@ -39,6 +40,32 @@ type ApiMatch = {
 };
 
 type ApiMatchPayload = { matches?: ApiMatch[]; match?: ApiMatch };
+
+type EspnCompetitor = {
+  homeAway: "home" | "away";
+  score?: string | number | null;
+  team?: {
+    abbreviation?: string | null;
+    displayName?: string | null;
+    name?: string | null;
+  } | null;
+};
+
+type EspnEvent = {
+  id: string;
+  date: string;
+  status?: {
+    type?: {
+      state?: "pre" | "in" | "post";
+      completed?: boolean;
+    } | null;
+  } | null;
+  competitions?: Array<{
+    competitors?: EspnCompetitor[];
+  }>;
+};
+
+type EspnScoreboardPayload = { events?: EspnEvent[] };
 
 const STAGE_TO_PHASE: Record<string, Phase> = {
   GROUP_STAGE: "GROUP",
@@ -122,6 +149,13 @@ function mapStatus(api: string): Status {
   return "SCHEDULED";
 }
 
+function mapEspnStatus(event: EspnEvent): Status {
+  const state = event.status?.type?.state;
+  if (event.status?.type?.completed || state === "post") return "FINISHED";
+  if (state === "in") return "LIVE";
+  return "SCHEDULED";
+}
+
 export type SyncResult = {
   ok: boolean;
   message: string;
@@ -187,6 +221,35 @@ async function fetchApiMatches(token: string, url: string): Promise<FetchResult>
         : `No se pudo contactar la API: ${err.message}`;
     return { ok: false, result: emptyResult(false, msg) };
   }
+}
+
+async function fetchEspnEventsForDate(date: Date): Promise<EspnEvent[]> {
+  const ymd = date.toISOString().slice(0, 10).replace(/-/g, "");
+  const res = await fetch(`${ESPN_BASE}/scoreboard?dates=${ymd}`, {
+    cache: "no-store",
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) return [];
+  const data = (await res.json()) as EspnScoreboardPayload;
+  return data.events ?? [];
+}
+
+async function fetchEspnEventsAround(date: Date): Promise<EspnEvent[]> {
+  const dates = [
+    date,
+    new Date(date.getTime() - 12 * 60 * 60_000),
+    new Date(date.getTime() + 12 * 60 * 60_000),
+  ];
+  const seen = new Set<string>();
+  const events: EspnEvent[] = [];
+  for (const d of dates) {
+    for (const event of await fetchEspnEventsForDate(d)) {
+      if (seen.has(event.id)) continue;
+      seen.add(event.id);
+      events.push(event);
+    }
+  }
+  return events;
 }
 
 type TeamResolver = (api: ApiTeam) => number | null;
@@ -289,6 +352,7 @@ function findApiMatchForTarget(
       );
     });
     if (byTeams) return byTeams;
+    return null;
   }
 
   const closest = samePhase
@@ -301,13 +365,173 @@ function findApiMatchForTarget(
   return closest && closest.delta <= ACTIVE_TAIL_MS ? closest.match : null;
 }
 
+function isCurrentEspnEvent(event: EspnEvent, now: Date): boolean {
+  const status = mapEspnStatus(event);
+  if (status === "LIVE") return true;
+  if (status !== "FINISHED") return false;
+
+  const kickoff = new Date(event.date).getTime();
+  return now.getTime() - kickoff <= ACTIVE_TAIL_MS && now.getTime() >= kickoff;
+}
+
+async function findEspnCurrentSyncTarget(
+  now: Date,
+  resolveTeam: TeamResolver,
+): Promise<Target | null> {
+  const events = await fetchEspnEventsAround(now);
+  for (const event of events) {
+    if (!isCurrentEspnEvent(event, now)) continue;
+
+    const competitors = event.competitions?.[0]?.competitors ?? [];
+    const home = competitors.find((c) => c.homeAway === "home");
+    const away = competitors.find((c) => c.homeAway === "away");
+    const homeId = resolveTeam({
+      id: 0,
+      name: home?.team?.displayName ?? home?.team?.name ?? "",
+      shortName: home?.team?.name ?? null,
+      tla: home?.team?.abbreviation ?? null,
+    });
+    const awayId = resolveTeam({
+      id: 0,
+      name: away?.team?.displayName ?? away?.team?.name ?? "",
+      shortName: away?.team?.name ?? null,
+      tla: away?.team?.abbreviation ?? null,
+    });
+    if (!homeId || !awayId) continue;
+
+    const target = await prisma.match.findFirst({
+      where: {
+        status: { not: "FINISHED" },
+        OR: [
+          { homeTeamId: homeId, awayTeamId: awayId },
+          { homeTeamId: awayId, awayTeamId: homeId },
+        ],
+      },
+      orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
+    });
+    if (target) return target;
+  }
+
+  return null;
+}
+
+function parseEspnScore(value: string | number | null | undefined): number | null {
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const n = Number(value);
+  return Number.isInteger(n) ? n : null;
+}
+
+function findEspnEventForTarget(
+  target: Target,
+  events: EspnEvent[],
+  resolveTeam: TeamResolver,
+): EspnEvent | null {
+  if (!target.homeTeamId || !target.awayTeamId) return null;
+
+  for (const event of events) {
+    const competitors = event.competitions?.[0]?.competitors ?? [];
+    const home = competitors.find((c) => c.homeAway === "home");
+    const away = competitors.find((c) => c.homeAway === "away");
+    const homeId = resolveTeam({
+      id: 0,
+      name: home?.team?.displayName ?? home?.team?.name ?? "",
+      shortName: home?.team?.name ?? null,
+      tla: home?.team?.abbreviation ?? null,
+    });
+    const awayId = resolveTeam({
+      id: 0,
+      name: away?.team?.displayName ?? away?.team?.name ?? "",
+      shortName: away?.team?.name ?? null,
+      tla: away?.team?.abbreviation ?? null,
+    });
+
+    if (
+      (homeId === target.homeTeamId && awayId === target.awayTeamId) ||
+      (homeId === target.awayTeamId && awayId === target.homeTeamId)
+    ) {
+      return event;
+    }
+  }
+
+  return null;
+}
+
+async function applyEspnFallbackUpdate(
+  target: Target,
+  resolveTeam: TeamResolver,
+): Promise<ApplyResult | null> {
+  const events = await fetchEspnEventsForDate(target.kickoffAt);
+  const event = findEspnEventForTarget(target, events, resolveTeam);
+  if (!event) return null;
+
+  const competitors = event.competitions?.[0]?.competitors ?? [];
+  const home = competitors.find((c) => c.homeAway === "home");
+  const away = competitors.find((c) => c.homeAway === "away");
+  const espnHomeId = resolveTeam({
+    id: 0,
+    name: home?.team?.displayName ?? home?.team?.name ?? "",
+    shortName: home?.team?.name ?? null,
+    tla: home?.team?.abbreviation ?? null,
+  });
+  const espnAwayId = resolveTeam({
+    id: 0,
+    name: away?.team?.displayName ?? away?.team?.name ?? "",
+    shortName: away?.team?.name ?? null,
+    tla: away?.team?.abbreviation ?? null,
+  });
+
+  const rawHome = parseEspnScore(home?.score);
+  const rawAway = parseEspnScore(away?.score);
+  const status = mapEspnStatus(event);
+  const hasScore = rawHome !== null && rawAway !== null && status !== "SCHEDULED";
+  const hadScore = target.homeScore !== null && target.awayScore !== null;
+
+  const data: {
+    status: Status;
+    kickoffAt: Date;
+    homeScore?: number;
+    awayScore?: number;
+    winnerTeamId?: number | null;
+  } = {
+    status,
+    kickoffAt: new Date(event.date),
+  };
+
+  if (hasScore) {
+    if (target.homeTeamId === espnHomeId) {
+      data.homeScore = rawHome;
+      data.awayScore = rawAway;
+    } else {
+      data.homeScore = rawAway;
+      data.awayScore = rawHome;
+    }
+    if (status === "FINISHED" && target.homeTeamId && target.awayTeamId) {
+      if (data.homeScore > data.awayScore) data.winnerTeamId = target.homeTeamId;
+      else if (data.awayScore > data.homeScore) data.winnerTeamId = target.awayTeamId;
+      else data.winnerTeamId = null;
+    }
+  }
+
+  await prisma.match.update({ where: { id: target.id }, data });
+  return {
+    hasScore,
+    shouldRecompute: hasScore || hadScore,
+    finished: status === "FINISHED" && hasScore,
+    teamsKnown: espnHomeId !== null && espnAwayId !== null,
+    assigned: 0,
+  };
+}
+
 export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<SyncResult> {
   const token = process.env.FOOTBALL_DATA_TOKEN;
   if (!token) {
     return emptyResult(false, "FOOTBALL_DATA_TOKEN no esta configurado.");
   }
 
-  const target = await getCurrentSyncTarget(now);
+  const resolveTeam = await createTeamResolver();
+  const target =
+    (await findEspnCurrentSyncTarget(now, resolveTeam)) ?? (await getCurrentSyncTarget(now));
   if (!target) {
     return emptyResult(true, "Sin partido actual; no se consulto la API.");
   }
@@ -334,7 +558,6 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
     return fetched.result;
   }
 
-  const resolveTeam = await createTeamResolver();
   const apiMatch = findApiMatchForTarget(target, fetched.matches, resolveTeam);
   if (!apiMatch) {
     if (hasStoredScore(target)) {
@@ -406,6 +629,19 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
     result = await applyKnockoutUpdate(target, apiMatch, h, a);
   }
 
+  let usedEspnFallback = false;
+  if (!result.hasScore) {
+    try {
+      const fallback = await applyEspnFallbackUpdate(target, resolveTeam);
+      if (fallback?.hasScore) {
+        result = fallback;
+        usedEspnFallback = true;
+      }
+    } catch (error) {
+      console.error("[sync] Error consultando fallback ESPN", error);
+    }
+  }
+
   let errors = 0;
   let scoring = emptyScoring();
   if (result.shouldRecompute) {
@@ -426,6 +662,7 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
     ok: true,
     message:
       `Sincronizacion del partido actual completa: ${result.hasScore ? 1 : 0} marcador` +
+      (usedEspnFallback ? " (fallback ESPN)" : "") +
       (errors > 0 ? `. Avisos: ${errors} con error.` : "."),
     fetched: fetched.matches.length,
     matchesUpdated: 1,
