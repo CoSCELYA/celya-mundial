@@ -7,7 +7,7 @@ import { requireAdmin, requireSuperAdmin } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
 import { recomputeMatchPoints, recomputeChampionPoints, getScoringConfig } from "@/lib/scoring";
 import { isPredictionOpen } from "@/lib/dates";
-import { syncWorldCup } from "@/lib/football-data";
+import { syncCurrentWorldCupMatch } from "@/lib/football-data";
 import {
   userUpsertSchema,
   scoreSchema,
@@ -259,9 +259,11 @@ export async function setUserStatus(fd: FormData): Promise<void> {
 // Los partidos NO se crean/editan/eliminan: son los 104 oficiales del Mundial.
 // Se sincronizan desde football-data.org (equipos de eliminatorias y marcadores).
 export async function syncMatches(_prev: ActionState, _fd: FormData): Promise<ActionState> {
+  void _prev;
+  void _fd;
   await requireAdmin();
 
-  const result = await syncWorldCup();
+  const result = await syncCurrentWorldCupMatch();
   revalidateAdmin(["/admin/partidos", "/admin/tabla", "/admin", "/partidos", "/tabla"]);
   return result.ok ? { success: result.message } : { error: result.message };
 }

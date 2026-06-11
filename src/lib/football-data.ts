@@ -1,12 +1,15 @@
 import "server-only";
-import type { Phase } from "@prisma/client";
+import type { Match, Phase } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { recomputeMatchPoints, recomputeChampionPoints } from "@/lib/scoring";
 
-// Integración con football-data.org (v4). Requiere FOOTBALL_DATA_TOKEN (gratuito).
-// Competición FIFA World Cup => code "WC".
+// Integracion con football-data.org (v4). Requiere FOOTBALL_DATA_TOKEN.
+// Competicion FIFA World Cup => code "WC".
 const BASE = "https://api.football-data.org/v4";
 const COMPETITION = "WC";
+
+const ACTIVE_LEAD_MS = 15 * 60_000;
+const ACTIVE_TAIL_MS = 4 * 60 * 60_000;
 
 type ApiTeam = {
   id: number;
@@ -31,6 +34,8 @@ type ApiMatch = {
   } | null;
 };
 
+type ApiMatchPayload = { matches?: ApiMatch[]; match?: ApiMatch };
+
 const STAGE_TO_PHASE: Record<string, Phase> = {
   GROUP_STAGE: "GROUP",
   LAST_32: "R32",
@@ -49,38 +54,37 @@ export function isSyncConfigured(): boolean {
   return Boolean(process.env.FOOTBALL_DATA_TOKEN);
 }
 
-/**
- * ¿Hay algún partido en curso o por empezar? Se usa para que el cron solo
- * consulte la API cuando vale la pena: desde 15 min antes del kickoff hasta
- * ~4 h después (cubre prórroga, penales y demoras), o si ya está en juego.
- * Cuando no hay ventana activa, el cron no gasta peticiones a football-data.
- */
 export async function hasActiveMatchWindow(now: Date = new Date()): Promise<boolean> {
-  const LEAD_MS = 15 * 60_000; // empieza un poco antes del kickoff
-  const TAIL_MS = 4 * 60 * 60_000; // sigue un buen rato después por si acaso
-  const from = new Date(now.getTime() - TAIL_MS);
-  const to = new Date(now.getTime() + LEAD_MS);
+  return (await getCurrentSyncTarget(now)) !== null;
+}
 
-  const count = await prisma.match.count({
-    where: {
-      OR: [
-        { status: "LIVE" },
-        { status: { not: "FINISHED" }, kickoffAt: { gte: from, lte: to } },
-      ],
-    },
+async function getCurrentSyncTarget(now: Date = new Date()) {
+  const live = await prisma.match.findFirst({
+    where: { status: "LIVE" },
+    orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
   });
-  return count > 0;
+  if (live) return live;
+
+  const from = new Date(now.getTime() - ACTIVE_TAIL_MS);
+  const to = new Date(now.getTime() + ACTIVE_LEAD_MS);
+
+  return prisma.match.findFirst({
+    where: {
+      status: { not: "FINISHED" },
+      kickoffAt: { gte: from, lte: to },
+    },
+    orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
+  });
 }
 
 function normalize(s: string): string {
   return s
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "") // strip diacritics
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z]/g, "");
 }
 
-// Aliases de nombres en inglés (football-data) -> código FIFA nuestro.
 const NAME_ALIASES: Record<string, string> = {
   korearepublic: "KOR",
   southkorea: "KOR",
@@ -140,15 +144,13 @@ function emptyResult(ok: boolean, message: string): SyncResult {
   };
 }
 
-export async function syncWorldCup(): Promise<SyncResult> {
-  const token = process.env.FOOTBALL_DATA_TOKEN;
-  if (!token) {
-    return emptyResult(false, "FOOTBALL_DATA_TOKEN no está configurado.");
-  }
+type FetchResult =
+  | { ok: true; matches: ApiMatch[] }
+  | { ok: false; result: SyncResult };
 
-  let apiMatches: ApiMatch[] = [];
+async function fetchApiMatches(token: string, url: string): Promise<FetchResult> {
   try {
-    const res = await fetch(`${BASE}/competitions/${COMPETITION}/matches`, {
+    const res = await fetch(url, {
       headers: { "X-Auth-Token": token },
       cache: "no-store",
       signal: AbortSignal.timeout(15_000),
@@ -156,32 +158,35 @@ export async function syncWorldCup(): Promise<SyncResult> {
     if (!res.ok) {
       let msg = `Error de la API (${res.status}).`;
       if (res.status === 401 || res.status === 403) {
-        msg = `Token o plan inválido (${res.status}). Verifica FOOTBALL_DATA_TOKEN.`;
+        msg = `Token o plan invalido (${res.status}). Verifica FOOTBALL_DATA_TOKEN.`;
       } else if (res.status === 429) {
         const retry = res.headers.get("Retry-After");
-        msg = `Límite de peticiones alcanzado (429).${retry ? ` Reintenta en ${retry}s.` : ""}`;
+        msg = `Limite de peticiones alcanzado (429).${retry ? ` Reintenta en ${retry}s.` : ""}`;
       } else if (res.status >= 500) {
-        msg = `La API de football-data no está disponible (${res.status}).`;
+        msg = `La API de football-data no esta disponible (${res.status}).`;
       }
-      return emptyResult(false, msg);
+      return { ok: false, result: emptyResult(false, msg) };
     }
-    const data = (await res.json()) as { matches?: ApiMatch[] };
-    apiMatches = data.matches ?? [];
+    const data = (await res.json()) as ApiMatchPayload;
+    return { ok: true, matches: data.match ? [data.match] : data.matches ?? [] };
   } catch (e) {
     const err = e as Error;
     const msg =
       err.name === "TimeoutError" || err.name === "AbortError"
         ? "Tiempo de espera agotado al contactar la API."
         : `No se pudo contactar la API: ${err.message}`;
-    return emptyResult(false, msg);
+    return { ok: false, result: emptyResult(false, msg) };
   }
+}
 
-  // Resolución de equipos: tla/nombre -> id interno.
+type TeamResolver = (api: ApiTeam) => number | null;
+
+async function createTeamResolver(): Promise<TeamResolver> {
   const teams = await prisma.team.findMany();
   const byFifa = new Map(teams.map((t) => [t.fifaCode.toUpperCase(), t.id]));
   const byName = new Map(teams.map((t) => [normalize(t.name), t.id]));
 
-  function resolveTeam(api: ApiTeam): number | null {
+  return (api: ApiTeam): number | null => {
     if (!api) return null;
     if (api.tla && byFifa.has(api.tla.toUpperCase())) return byFifa.get(api.tla.toUpperCase())!;
     for (const cand of [api.name, api.shortName]) {
@@ -191,8 +196,164 @@ export async function syncWorldCup(): Promise<SyncResult> {
       if (byName.has(n)) return byName.get(n)!;
     }
     return null;
+  };
+}
+
+function apiDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+type Target = Pick<
+  Match,
+  | "id"
+  | "externalId"
+  | "phase"
+  | "homeTeamId"
+  | "awayTeamId"
+  | "kickoffAt"
+  | "status"
+  | "homeScore"
+  | "awayScore"
+>;
+
+type ApplyResult = {
+  hasScore: boolean;
+  shouldRecompute: boolean;
+  finished: boolean;
+  teamsKnown: boolean;
+  assigned: number;
+};
+
+function findApiMatchForTarget(
+  target: Target,
+  apiMatches: ApiMatch[],
+  resolveTeam: TeamResolver,
+): ApiMatch | null {
+  if (target.externalId) {
+    return apiMatches.find((m) => m.id === target.externalId) ?? null;
   }
 
+  const samePhase = apiMatches.filter((m) => STAGE_TO_PHASE[m.stage] === target.phase);
+
+  if (target.phase === "GROUP" && target.homeTeamId && target.awayTeamId) {
+    const byTeams = samePhase.find((m) => {
+      const h = resolveTeam(m.homeTeam);
+      const a = resolveTeam(m.awayTeam);
+      return (
+        (h === target.homeTeamId && a === target.awayTeamId) ||
+        (h === target.awayTeamId && a === target.homeTeamId)
+      );
+    });
+    if (byTeams) return byTeams;
+  }
+
+  const closest = samePhase
+    .map((m) => ({
+      match: m,
+      delta: Math.abs(new Date(m.utcDate).getTime() - target.kickoffAt.getTime()),
+    }))
+    .sort((a, b) => a.delta - b.delta)[0];
+
+  return closest && closest.delta <= ACTIVE_TAIL_MS ? closest.match : null;
+}
+
+export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<SyncResult> {
+  const token = process.env.FOOTBALL_DATA_TOKEN;
+  if (!token) {
+    return emptyResult(false, "FOOTBALL_DATA_TOKEN no esta configurado.");
+  }
+
+  const target = await getCurrentSyncTarget(now);
+  if (!target) {
+    return emptyResult(true, "Sin partido actual; no se consulto la API.");
+  }
+
+  const url = target.externalId
+    ? `${BASE}/matches/${target.externalId}`
+    : `${BASE}/competitions/${COMPETITION}/matches?dateFrom=${apiDate(
+        target.kickoffAt,
+      )}&dateTo=${apiDate(target.kickoffAt)}`;
+
+  const fetched = await fetchApiMatches(token, url);
+  if (!fetched.ok) return fetched.result;
+
+  const resolveTeam = await createTeamResolver();
+  const apiMatch = findApiMatchForTarget(target, fetched.matches, resolveTeam);
+  if (!apiMatch) {
+    return {
+      ...emptyResult(true, "No se encontro en la API el partido actual."),
+      fetched: fetched.matches.length,
+      unmatched: 1,
+    };
+  }
+
+  const phase = STAGE_TO_PHASE[apiMatch.stage];
+  if (!phase) {
+    return {
+      ...emptyResult(true, `Fase desconocida en la API: ${apiMatch.stage}.`),
+      fetched: fetched.matches.length,
+      unknownStages: 1,
+    };
+  }
+
+  const h = resolveTeam(apiMatch.homeTeam);
+  const a = resolveTeam(apiMatch.awayTeam);
+  let result: ApplyResult;
+
+  if (target.phase === "GROUP") {
+    if (!h || !a) {
+      return {
+        ...emptyResult(true, "No se pudieron emparejar los equipos del partido actual."),
+        fetched: fetched.matches.length,
+        unmatched: 1,
+      };
+    }
+    result = await applyUpdate(target, apiMatch, h);
+  } else {
+    result = await applyKnockoutUpdate(target, apiMatch, h, a);
+  }
+
+  let errors = 0;
+  if (result.shouldRecompute) {
+    try {
+      await recomputeMatchPoints(target.id);
+    } catch {
+      errors++;
+    }
+  }
+  if (target.phase === "FINAL" && result.hasScore) {
+    try {
+      await recomputeChampionPoints();
+    } catch {
+      errors++;
+    }
+  }
+
+  return {
+    ok: true,
+    message:
+      `Sincronizacion del partido actual completa: ${result.hasScore ? 1 : 0} marcador` +
+      (errors > 0 ? `. Avisos: ${errors} con error.` : "."),
+    fetched: fetched.matches.length,
+    matchesUpdated: 1,
+    teamsAssigned: result.assigned,
+    scoresUpdated: result.hasScore ? 1 : 0,
+    unmatched: result.teamsKnown ? 0 : 1,
+    unknownStages: 0,
+    errors,
+  };
+}
+
+export async function syncWorldCup(): Promise<SyncResult> {
+  const token = process.env.FOOTBALL_DATA_TOKEN;
+  if (!token) {
+    return emptyResult(false, "FOOTBALL_DATA_TOKEN no esta configurado.");
+  }
+
+  const fetched = await fetchApiMatches(token, `${BASE}/competitions/${COMPETITION}/matches`);
+  if (!fetched.ok) return fetched.result;
+
+  const resolveTeam = await createTeamResolver();
   const ourMatches = await prisma.match.findMany({ orderBy: { kickoffAt: "asc" } });
 
   let matchesUpdated = 0;
@@ -202,37 +363,32 @@ export async function syncWorldCup(): Promise<SyncResult> {
   let unknownStages = 0;
   let errors = 0;
   const unknownStageSet = new Set<string>();
-  const affectedFinished: number[] = [];
+  const affectedForPoints = new Set<number>();
   let finalTouched = false;
 
   type OurMatch = (typeof ourMatches)[number];
 
-  // Procesa el resultado de un applyUpdate/applyKnockoutUpdate aislando errores.
   async function processMatch(
     target: OurMatch,
     am: ApiMatch,
-    fn: () => Promise<{ scored: boolean; finished: boolean; teamsKnown: boolean; assigned: number }>,
+    fn: () => Promise<ApplyResult>,
     phase: Phase,
   ): Promise<void> {
     try {
       const r = await fn();
       matchesUpdated++;
       teamsAssigned += r.assigned;
-      scoresUpdated += r.scored ? 1 : 0;
+      scoresUpdated += r.hasScore ? 1 : 0;
       if (!r.teamsKnown) unmatched++;
-      if (r.finished) {
-        affectedFinished.push(target.id);
-        if (phase === "FINAL") finalTouched = true;
-      }
+      if (r.shouldRecompute) affectedForPoints.add(target.id);
+      if (phase === "FINAL" && r.hasScore) finalTouched = true;
     } catch {
-      // No abortar toda la sincronización por un fallo puntual (p.ej. colisión de externalId).
       errors++;
     }
   }
 
-  // Agrupa partidos de la API por fase (registra stages no reconocidos).
   const apiByPhase = new Map<Phase, ApiMatch[]>();
-  for (const am of apiMatches) {
+  for (const am of fetched.matches) {
     const phase = STAGE_TO_PHASE[am.stage];
     if (!phase) {
       unknownStages++;
@@ -244,12 +400,10 @@ export async function syncWorldCup(): Promise<SyncResult> {
     apiByPhase.set(phase, arr);
   }
 
-  // Procesa cada fase.
   for (const [phase, list] of apiByPhase) {
     const ourPhase = ourMatches.filter((m) => m.phase === phase);
 
     if (phase === "GROUP") {
-      // Empareja por par de equipos (sin importar orden local).
       for (const am of list) {
         const h = resolveTeam(am.homeTeam);
         const a = resolveTeam(am.awayTeam);
@@ -269,8 +423,6 @@ export async function syncWorldCup(): Promise<SyncResult> {
         await processMatch(target, am, () => applyUpdate(target, am, h), phase);
       }
     } else {
-      // Eliminatorias: ancla por externalId estable; usa orden cronológico solo
-      // como primera asignación para partidos que aún no tienen externalId.
       const apiSorted = [...list].sort(
         (x, y) => new Date(x.utcDate).getTime() - new Date(y.utcDate).getTime(),
       );
@@ -300,8 +452,7 @@ export async function syncWorldCup(): Promise<SyncResult> {
     }
   }
 
-  // Recalcula puntos de los partidos finalizados (aislando errores).
-  for (const id of affectedFinished) {
+  for (const id of affectedForPoints) {
     try {
       await recomputeMatchPoints(id);
     } catch {
@@ -323,12 +474,12 @@ export async function syncWorldCup(): Promise<SyncResult> {
   if (errors > 0) extras.push(`${errors} con error`);
 
   return {
-    ok: true,
+    ok: errors === 0,
     message:
-      `Sincronización completa: ${matchesUpdated} partidos actualizados, ` +
+      `Sincronizacion completa: ${matchesUpdated} partidos actualizados, ` +
       `${teamsAssigned} equipos asignados, ${scoresUpdated} marcadores` +
       (extras.length ? `. Avisos: ${extras.join("; ")}.` : "."),
-    fetched: apiMatches.length,
+    fetched: fetched.matches.length,
     matchesUpdated,
     teamsAssigned,
     scoresUpdated,
@@ -338,9 +489,6 @@ export async function syncWorldCup(): Promise<SyncResult> {
   };
 }
 
-type Target = { id: number; homeTeamId: number | null; awayTeamId: number | null };
-
-// Calcula el ganador de un partido finalizado (incluyendo penales en empates).
 function resolveWinner(
   am: ApiMatch,
   homeId: number,
@@ -350,7 +498,6 @@ function resolveWinner(
 ): number | null {
   if (homeScore > awayScore) return homeId;
   if (awayScore > homeScore) return awayId;
-  // Empate en el marcador (fullTime): se decide por penales / score.winner.
   const w = am.score?.winner;
   if (w === "HOME_TEAM") return homeId;
   if (w === "AWAY_TEAM") return awayId;
@@ -361,18 +508,16 @@ function resolveWinner(
   return null;
 }
 
-// Grupo: mantiene los equipos locales; alinea el marcador según orientación.
 async function applyUpdate(
   target: Target,
   am: ApiMatch,
   apiHomeId: number,
-): Promise<{ scored: boolean; finished: boolean; teamsKnown: boolean; assigned: number }> {
+): Promise<ApplyResult> {
   const status = mapStatus(am.status);
   const ft = am.score?.fullTime;
   let homeScore: number | null = null;
   let awayScore: number | null = null;
   if (ft && ft.home !== null && ft.away !== null) {
-    // Si nuestro "home" coincide con el "home" de la API, orientación directa.
     if (target.homeTeamId === apiHomeId) {
       homeScore = ft.home;
       awayScore = ft.away;
@@ -381,6 +526,10 @@ async function applyUpdate(
       awayScore = ft.home;
     }
   }
+
+  const hasScore = homeScore !== null && awayScore !== null;
+  const hadScore = target.homeScore !== null && target.awayScore !== null;
+
   await prisma.match.update({
     where: { id: target.id },
     data: {
@@ -392,21 +541,20 @@ async function applyUpdate(
     },
   });
   return {
-    scored: homeScore !== null,
-    finished: status === "FINISHED" && homeScore !== null,
+    hasScore,
+    shouldRecompute: hasScore || hadScore,
+    finished: status === "FINISHED" && hasScore,
     teamsKnown: true,
     assigned: 0,
   };
 }
 
-// Eliminatorias: asigna equipos desde la API. Nunca marca FINISHED ni guarda
-// marcador si no se conocen ambos equipos (evita estados inconsistentes).
 async function applyKnockoutUpdate(
   target: Target,
   am: ApiMatch,
   homeId: number | null,
   awayId: number | null,
-): Promise<{ scored: boolean; finished: boolean; teamsKnown: boolean; assigned: number }> {
+): Promise<ApplyResult> {
   const status = mapStatus(am.status);
   const ft = am.score?.fullTime;
   const rawHome = ft && ft.home !== null ? ft.home : null;
@@ -418,6 +566,7 @@ async function applyKnockoutUpdate(
   const assigned =
     (homeId && target.homeTeamId !== homeId ? 1 : 0) +
     (awayId && target.awayTeamId !== awayId ? 1 : 0);
+  const hadScore = target.homeScore !== null && target.awayScore !== null;
 
   const data: {
     externalId: number;
@@ -435,7 +584,7 @@ async function applyKnockoutUpdate(
   if (homeId) data.homeTeamId = homeId;
   if (awayId) data.awayTeamId = awayId;
 
-  let scored = false;
+  let hasScore = false;
   let finished = false;
 
   if (teamsKnown && rawHome !== null && rawAway !== null) {
@@ -444,14 +593,23 @@ async function applyKnockoutUpdate(
     data.awayScore = rawAway;
     data.winnerTeamId =
       status === "FINISHED" ? resolveWinner(am, effHome!, effAway!, rawHome, rawAway) : null;
-    scored = true;
+    hasScore = true;
     finished = status === "FINISHED";
   } else if (teamsKnown) {
-    // Equipos conocidos pero sin marcador: no marcar FINISHED todavía.
     data.status = status === "FINISHED" ? "SCHEDULED" : status;
+    if (hadScore) {
+      data.homeScore = null;
+      data.awayScore = null;
+      data.winnerTeamId = null;
+    }
   }
-  // Si los equipos no se conocen, no se toca status/marcador (solo externalId/fecha).
 
   await prisma.match.update({ where: { id: target.id }, data });
-  return { scored, finished, teamsKnown, assigned };
+  return {
+    hasScore,
+    shouldRecompute: hasScore || (teamsKnown && hadScore),
+    finished,
+    teamsKnown,
+    assigned,
+  };
 }

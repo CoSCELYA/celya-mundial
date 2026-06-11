@@ -13,7 +13,7 @@ function outcome(home: number, away: number): number {
   return Math.sign(home - away); // 1 home win, 0 draw, -1 away win
 }
 
-/** Points for a single prediction vs the real result. */
+/** Points for a single prediction vs the current official score. */
 export function predictionPoints(
   pred: { homeScore: number; awayScore: number },
   real: { homeScore: number; awayScore: number },
@@ -29,7 +29,8 @@ export function predictionPoints(
 }
 
 /**
- * Recompute all points derived from a single match (prediction + trivia).
+ * Recompute all points derived from a single match (prediction + trivia) using
+ * the current stored score, even if the match is still live.
  * Idempotent: wipes previous entries for the match and recreates them.
  */
 export async function recomputeMatchPoints(matchId: number): Promise<void> {
@@ -55,9 +56,8 @@ export async function recomputeMatchPoints(matchId: number): Promise<void> {
       data: { pointsAwarded: null, scoredAt: null },
     });
 
-    const finished =
-      match.status === "FINISHED" && match.homeScore !== null && match.awayScore !== null;
-    if (!finished) return;
+    const hasScore = match.homeScore !== null && match.awayScore !== null;
+    if (!hasScore) return;
 
     const real = { homeScore: match.homeScore!, awayScore: match.awayScore! };
 
@@ -88,7 +88,7 @@ export async function recomputeMatchPoints(matchId: number): Promise<void> {
 }
 
 /**
- * Recompute champion / runner-up points based on the FINAL match result.
+ * Recompute champion / runner-up points based on the current FINAL score.
  * Champion = FINAL winner, runner-up = FINAL loser. Idempotent.
  */
 export async function recomputeChampionPoints(): Promise<void> {
@@ -110,7 +110,6 @@ export async function recomputeChampionPoints(): Promise<void> {
 
     const ready =
       final &&
-      final.status === "FINISHED" &&
       final.homeTeamId !== null &&
       final.awayTeamId !== null &&
       decided;
