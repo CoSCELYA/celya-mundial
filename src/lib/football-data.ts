@@ -401,7 +401,6 @@ async function findEspnCurrentSyncTarget(
 
     const target = await prisma.match.findFirst({
       where: {
-        status: { not: "FINISHED" },
         OR: [
           { homeTeamId: homeId, awayTeamId: awayId },
           { homeTeamId: awayId, awayTeamId: homeId },
