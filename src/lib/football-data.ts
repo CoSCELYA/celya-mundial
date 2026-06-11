@@ -596,10 +596,40 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
 
   const apiMatch = findApiMatchForTarget(target, fetched.matches, resolveTeam);
   if (!apiMatch) {
+    try {
+      const fallback = await applyEspnFallbackUpdate(target, resolveTeam);
+      if (fallback?.hasScore) {
+        const { scoring, errors } = await recomputeStoredScore(target.id, "api-unmatched-espn");
+        return {
+          ...emptyResult(
+            errors === 0,
+            "No se encontro en la API el partido actual; se aplico marcador ESPN.",
+          ),
+          source: "espn-fallback",
+          selectedMatch: selectedMatchDebug(target),
+          appliedScore: fallback.appliedScore,
+          fetched: fetched.matches.length,
+          matchesUpdated: 1,
+          teamsAssigned: fallback.assigned,
+          scoresUpdated: 1,
+          predictionsScored: scoring.predictionsScored,
+          pointsEntriesCreated: scoring.pointsEntriesCreated,
+          totalPointsCreated: scoring.totalPointsCreated,
+          unmatched: fallback.teamsKnown ? 0 : 1,
+          errors,
+        };
+      }
+    } catch (error) {
+      console.error("[sync] Error consultando fallback ESPN tras api-unmatched", error);
+    }
+
     if (hasStoredScore(target)) {
       const { scoring, errors } = await recomputeStoredScore(target.id, "api-unmatched");
       return {
         ...emptyResult(errors === 0, "No se encontro en la API el partido actual; se recalculo el marcador local guardado."),
+        source: "local-score",
+        selectedMatch: selectedMatchDebug(target),
+        appliedScore: `${target.homeScore}-${target.awayScore}`,
         fetched: fetched.matches.length,
         predictionsScored: scoring.predictionsScored,
         pointsEntriesCreated: scoring.pointsEntriesCreated,
