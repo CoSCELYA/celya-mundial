@@ -25,6 +25,20 @@ async function handle(req: NextRequest) {
 
   const force = req.nextUrl.searchParams.get("force") === "1";
   const result = force ? await syncWorldCup() : await syncCurrentWorldCupMatch();
+  console.info("[sync]", {
+    force,
+    ok: result.ok,
+    message: result.message,
+    fetched: result.fetched,
+    matchesUpdated: result.matchesUpdated,
+    scoresUpdated: result.scoresUpdated,
+    predictionsScored: result.predictionsScored,
+    pointsEntriesCreated: result.pointsEntriesCreated,
+    totalPointsCreated: result.totalPointsCreated,
+    unmatched: result.unmatched,
+    unknownStages: result.unknownStages,
+    errors: result.errors,
+  });
   return NextResponse.json(result, { status: result.ok ? 200 : 502 });
 }
 

@@ -1,7 +1,11 @@
 import "server-only";
 import type { Match, Phase } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { recomputeMatchPoints, recomputeChampionPoints } from "@/lib/scoring";
+import {
+  recomputeMatchPoints,
+  recomputeChampionPoints,
+  type RecomputeMatchPointsResult,
+} from "@/lib/scoring";
 
 // Integracion con football-data.org (v4). Requiere FOOTBALL_DATA_TOKEN.
 // Competicion FIFA World Cup => code "WC".
@@ -125,6 +129,9 @@ export type SyncResult = {
   matchesUpdated: number;
   teamsAssigned: number;
   scoresUpdated: number;
+  predictionsScored: number;
+  pointsEntriesCreated: number;
+  totalPointsCreated: number;
   unmatched: number;
   unknownStages: number;
   errors: number;
@@ -138,6 +145,9 @@ function emptyResult(ok: boolean, message: string): SyncResult {
     matchesUpdated: 0,
     teamsAssigned: 0,
     scoresUpdated: 0,
+    predictionsScored: 0,
+    pointsEntriesCreated: 0,
+    totalPointsCreated: 0,
     unmatched: 0,
     unknownStages: 0,
     errors: 0,
@@ -224,6 +234,32 @@ type ApplyResult = {
   assigned: number;
 };
 
+function hasStoredScore(target: Target): boolean {
+  return target.homeScore !== null && target.awayScore !== null;
+}
+
+function emptyScoring(): RecomputeMatchPointsResult {
+  return {
+    hasScore: false,
+    predictionsScored: 0,
+    pointsEntriesCreated: 0,
+    totalPointsCreated: 0,
+  };
+}
+
+async function recomputeStoredScore(
+  matchId: number,
+  context: string,
+): Promise<{ scoring: RecomputeMatchPointsResult; errors: number }> {
+  try {
+    const scoring = await recomputeMatchPoints(matchId);
+    return { scoring, errors: 0 };
+  } catch (error) {
+    console.error(`[sync] Error recalculando puntos (${context})`, error);
+    return { scoring: emptyScoring(), errors: 1 };
+  }
+}
+
 async function canAssignExternalId(targetId: number, externalId: number): Promise<boolean> {
   const conflict = await prisma.match.findFirst({
     where: { externalId, NOT: { id: targetId } },
@@ -283,11 +319,36 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
       )}&dateTo=${apiDate(target.kickoffAt)}`;
 
   const fetched = await fetchApiMatches(token, url);
-  if (!fetched.ok) return fetched.result;
+  if (!fetched.ok) {
+    if (hasStoredScore(target)) {
+      const { scoring, errors } = await recomputeStoredScore(target.id, "api-error");
+      return {
+        ...fetched.result,
+        message: `${fetched.result.message} Se recalculo el marcador local guardado.`,
+        predictionsScored: scoring.predictionsScored,
+        pointsEntriesCreated: scoring.pointsEntriesCreated,
+        totalPointsCreated: scoring.totalPointsCreated,
+        errors: fetched.result.errors + errors,
+      };
+    }
+    return fetched.result;
+  }
 
   const resolveTeam = await createTeamResolver();
   const apiMatch = findApiMatchForTarget(target, fetched.matches, resolveTeam);
   if (!apiMatch) {
+    if (hasStoredScore(target)) {
+      const { scoring, errors } = await recomputeStoredScore(target.id, "api-unmatched");
+      return {
+        ...emptyResult(errors === 0, "No se encontro en la API el partido actual; se recalculo el marcador local guardado."),
+        fetched: fetched.matches.length,
+        predictionsScored: scoring.predictionsScored,
+        pointsEntriesCreated: scoring.pointsEntriesCreated,
+        totalPointsCreated: scoring.totalPointsCreated,
+        unmatched: 1,
+        errors,
+      };
+    }
     return {
       ...emptyResult(true, "No se encontro en la API el partido actual."),
       fetched: fetched.matches.length,
@@ -297,6 +358,18 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
 
   const phase = STAGE_TO_PHASE[apiMatch.stage];
   if (!phase) {
+    if (hasStoredScore(target)) {
+      const { scoring, errors } = await recomputeStoredScore(target.id, "unknown-stage");
+      return {
+        ...emptyResult(errors === 0, `Fase desconocida en la API: ${apiMatch.stage}. Se recalculo el marcador local guardado.`),
+        fetched: fetched.matches.length,
+        predictionsScored: scoring.predictionsScored,
+        pointsEntriesCreated: scoring.pointsEntriesCreated,
+        totalPointsCreated: scoring.totalPointsCreated,
+        unknownStages: 1,
+        errors,
+      };
+    }
     return {
       ...emptyResult(true, `Fase desconocida en la API: ${apiMatch.stage}.`),
       fetched: fetched.matches.length,
@@ -310,6 +383,18 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
 
   if (target.phase === "GROUP") {
     if (!h || !a) {
+      if (hasStoredScore(target)) {
+        const { scoring, errors } = await recomputeStoredScore(target.id, "teams-unmatched");
+        return {
+          ...emptyResult(errors === 0, "No se pudieron emparejar los equipos del partido actual; se recalculo el marcador local guardado."),
+          fetched: fetched.matches.length,
+          predictionsScored: scoring.predictionsScored,
+          pointsEntriesCreated: scoring.pointsEntriesCreated,
+          totalPointsCreated: scoring.totalPointsCreated,
+          unmatched: 1,
+          errors,
+        };
+      }
       return {
         ...emptyResult(true, "No se pudieron emparejar los equipos del partido actual."),
         fetched: fetched.matches.length,
@@ -322,17 +407,17 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
   }
 
   let errors = 0;
+  let scoring = emptyScoring();
   if (result.shouldRecompute) {
-    try {
-      await recomputeMatchPoints(target.id);
-    } catch {
-      errors++;
-    }
+    const recomputed = await recomputeStoredScore(target.id, "api-match");
+    scoring = recomputed.scoring;
+    errors += recomputed.errors;
   }
   if (target.phase === "FINAL" && result.hasScore) {
     try {
       await recomputeChampionPoints();
-    } catch {
+    } catch (error) {
+      console.error("[sync] Error recalculando campeon/subcampeon", error);
       errors++;
     }
   }
@@ -346,6 +431,9 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
     matchesUpdated: 1,
     teamsAssigned: result.assigned,
     scoresUpdated: result.hasScore ? 1 : 0,
+    predictionsScored: scoring.predictionsScored,
+    pointsEntriesCreated: scoring.pointsEntriesCreated,
+    totalPointsCreated: scoring.totalPointsCreated,
     unmatched: result.teamsKnown ? 0 : 1,
     unknownStages: 0,
     errors,
@@ -367,6 +455,9 @@ export async function syncWorldCup(): Promise<SyncResult> {
   let matchesUpdated = 0;
   let teamsAssigned = 0;
   let scoresUpdated = 0;
+  let predictionsScored = 0;
+  let pointsEntriesCreated = 0;
+  let totalPointsCreated = 0;
   let unmatched = 0;
   let unknownStages = 0;
   let errors = 0;
@@ -462,15 +553,20 @@ export async function syncWorldCup(): Promise<SyncResult> {
 
   for (const id of affectedForPoints) {
     try {
-      await recomputeMatchPoints(id);
-    } catch {
+      const scoring = await recomputeMatchPoints(id);
+      predictionsScored += scoring.predictionsScored;
+      pointsEntriesCreated += scoring.pointsEntriesCreated;
+      totalPointsCreated += scoring.totalPointsCreated;
+    } catch (error) {
+      console.error("[sync] Error recalculando puntos en sync completo", error);
       errors++;
     }
   }
   if (finalTouched) {
     try {
       await recomputeChampionPoints();
-    } catch {
+    } catch (error) {
+      console.error("[sync] Error recalculando campeon/subcampeon en sync completo", error);
       errors++;
     }
   }
@@ -491,6 +587,9 @@ export async function syncWorldCup(): Promise<SyncResult> {
     matchesUpdated,
     teamsAssigned,
     scoresUpdated,
+    predictionsScored,
+    pointsEntriesCreated,
+    totalPointsCreated,
     unmatched,
     unknownStages,
     errors,

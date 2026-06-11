@@ -2,6 +2,13 @@ import "server-only";
 import { prisma } from "@/lib/db";
 import type { ScoringConfig } from "@prisma/client";
 
+export type RecomputeMatchPointsResult = {
+  hasScore: boolean;
+  predictionsScored: number;
+  pointsEntriesCreated: number;
+  totalPointsCreated: number;
+};
+
 /** Return the singleton scoring config, creating defaults if missing. */
 export async function getScoringConfig(): Promise<ScoringConfig> {
   const existing = await prisma.scoringConfig.findUnique({ where: { id: 1 } });
@@ -33,7 +40,7 @@ export function predictionPoints(
  * the current stored score, even if the match is still live.
  * Idempotent: wipes previous entries for the match and recreates them.
  */
-export async function recomputeMatchPoints(matchId: number): Promise<void> {
+export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMatchPointsResult> {
   const cfg = await getScoringConfig();
   const match = await prisma.match.findUnique({
     where: { id: matchId },
@@ -42,9 +49,16 @@ export async function recomputeMatchPoints(matchId: number): Promise<void> {
       question: { include: { answers: true } },
     },
   });
-  if (!match) return;
+  if (!match) {
+    return {
+      hasScore: false,
+      predictionsScored: 0,
+      pointsEntriesCreated: 0,
+      totalPointsCreated: 0,
+    };
+  }
 
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     // Serializa recomputes concurrentes del mismo partido (cron + carga manual)
     // para que dos transacciones no dupliquen entradas de puntos.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
@@ -57,9 +71,18 @@ export async function recomputeMatchPoints(matchId: number): Promise<void> {
     });
 
     const hasScore = match.homeScore !== null && match.awayScore !== null;
-    if (!hasScore) return;
+    if (!hasScore) {
+      return {
+        hasScore: false,
+        predictionsScored: 0,
+        pointsEntriesCreated: 0,
+        totalPointsCreated: 0,
+      };
+    }
 
     const real = { homeScore: match.homeScore!, awayScore: match.awayScore! };
+    let pointsEntriesCreated = 0;
+    let totalPointsCreated = 0;
 
     for (const pred of match.predictions) {
       const { points, type } = predictionPoints(pred, real, cfg);
@@ -71,6 +94,8 @@ export async function recomputeMatchPoints(matchId: number): Promise<void> {
         await tx.pointsEntry.create({
           data: { userId: pred.userId, matchId, type, points },
         });
+        pointsEntriesCreated++;
+        totalPointsCreated += points;
       }
     }
 
@@ -81,9 +106,18 @@ export async function recomputeMatchPoints(matchId: number): Promise<void> {
           await tx.pointsEntry.create({
             data: { userId: ans.userId, matchId, type: "TRIVIA", points: cfg.triviaPts },
           });
+          pointsEntriesCreated++;
+          totalPointsCreated += cfg.triviaPts;
         }
       }
     }
+
+    return {
+      hasScore: true,
+      predictionsScored: match.predictions.length,
+      pointsEntriesCreated,
+      totalPointsCreated,
+    };
   });
 }
 
