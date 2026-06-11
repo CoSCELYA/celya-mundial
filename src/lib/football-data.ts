@@ -15,6 +15,7 @@ const ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.wor
 
 const ACTIVE_LEAD_MS = 15 * 60_000;
 const ACTIVE_TAIL_MS = 4 * 60 * 60_000;
+const ESPN_FINISHED_TAIL_MS = 24 * 60 * 60_000;
 
 type ApiTeam = {
   id: number;
@@ -159,6 +160,18 @@ function mapEspnStatus(event: EspnEvent): Status {
 export type SyncResult = {
   ok: boolean;
   message: string;
+  source?: "football-data" | "espn-fallback" | "local-score";
+  selectedMatch?: {
+    id: number;
+    externalId: number | null;
+    phase: Phase;
+    homeTeamId: number | null;
+    awayTeamId: number | null;
+    kickoffAt: string;
+    status: Status;
+    storedScore: string | null;
+  };
+  appliedScore?: string | null;
   fetched: number;
   matchesUpdated: number;
   teamsAssigned: number;
@@ -185,6 +198,19 @@ function emptyResult(ok: boolean, message: string): SyncResult {
     unmatched: 0,
     unknownStages: 0,
     errors: 0,
+  };
+}
+
+function selectedMatchDebug(target: Target): NonNullable<SyncResult["selectedMatch"]> {
+  return {
+    id: target.id,
+    externalId: target.externalId,
+    phase: target.phase,
+    homeTeamId: target.homeTeamId,
+    awayTeamId: target.awayTeamId,
+    kickoffAt: target.kickoffAt.toISOString(),
+    status: target.status,
+    storedScore: hasStoredScore(target) ? `${target.homeScore}-${target.awayScore}` : null,
   };
 }
 
@@ -295,6 +321,7 @@ type ApplyResult = {
   finished: boolean;
   teamsKnown: boolean;
   assigned: number;
+  appliedScore: string | null;
 };
 
 function hasStoredScore(target: Target): boolean {
@@ -371,7 +398,7 @@ function isCurrentEspnEvent(event: EspnEvent, now: Date): boolean {
   if (status !== "FINISHED") return false;
 
   const kickoff = new Date(event.date).getTime();
-  return now.getTime() - kickoff <= ACTIVE_TAIL_MS && now.getTime() >= kickoff;
+  return now.getTime() - kickoff <= ESPN_FINISHED_TAIL_MS && now.getTime() >= kickoff;
 }
 
 async function findEspnCurrentSyncTarget(
@@ -379,8 +406,17 @@ async function findEspnCurrentSyncTarget(
   resolveTeam: TeamResolver,
 ): Promise<Target | null> {
   const events = await fetchEspnEventsAround(now);
-  for (const event of events) {
-    if (!isCurrentEspnEvent(event, now)) continue;
+  const candidates = events
+    .filter((event) => isCurrentEspnEvent(event, now))
+    .sort((a, b) => {
+      const statusA = mapEspnStatus(a);
+      const statusB = mapEspnStatus(b);
+      if (statusA === "LIVE" && statusB !== "LIVE") return -1;
+      if (statusB === "LIVE" && statusA !== "LIVE") return 1;
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+  for (const event of candidates) {
 
     const competitors = event.competitions?.[0]?.competitors ?? [];
     const home = competitors.find((c) => c.homeAway === "home");
@@ -519,6 +555,7 @@ async function applyEspnFallbackUpdate(
     finished: status === "FINISHED" && hasScore,
     teamsKnown: espnHomeId !== null && espnAwayId !== null,
     assigned: 0,
+    appliedScore: hasScore ? `${data.homeScore}-${data.awayScore}` : null,
   };
 }
 
@@ -663,6 +700,9 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
       `Sincronizacion del partido actual completa: ${result.hasScore ? 1 : 0} marcador` +
       (usedEspnFallback ? " (fallback ESPN)" : "") +
       (errors > 0 ? `. Avisos: ${errors} con error.` : "."),
+    source: usedEspnFallback ? "espn-fallback" : "football-data",
+    selectedMatch: selectedMatchDebug(target),
+    appliedScore: result.appliedScore,
     fetched: fetched.matches.length,
     matchesUpdated: 1,
     teamsAssigned: result.assigned,
@@ -898,6 +938,7 @@ async function applyUpdate(
     finished: status === "FINISHED" && hasScore,
     teamsKnown: true,
     assigned: 0,
+    appliedScore: hasScore ? `${homeScore}-${awayScore}` : null,
   };
 }
 
@@ -958,5 +999,6 @@ async function applyKnockoutUpdate(
     finished,
     teamsKnown,
     assigned,
+    appliedScore: hasScore ? `${data.homeScore}-${data.awayScore}` : null,
   };
 }
