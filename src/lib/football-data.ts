@@ -224,6 +224,14 @@ type ApplyResult = {
   assigned: number;
 };
 
+async function canAssignExternalId(targetId: number, externalId: number): Promise<boolean> {
+  const conflict = await prisma.match.findFirst({
+    where: { externalId, NOT: { id: targetId } },
+    select: { id: true },
+  });
+  return conflict === null;
+}
+
 function findApiMatchForTarget(
   target: Target,
   apiMatches: ApiMatch[],
@@ -530,16 +538,25 @@ async function applyUpdate(
   const hasScore = homeScore !== null && awayScore !== null;
   const hadScore = target.homeScore !== null && target.awayScore !== null;
 
-  await prisma.match.update({
-    where: { id: target.id },
-    data: {
-      externalId: am.id,
-      status,
-      homeScore,
-      awayScore,
-      kickoffAt: new Date(am.utcDate),
-    },
-  });
+  const data: {
+    externalId?: number;
+    status: Status;
+    kickoffAt: Date;
+    homeScore?: number;
+    awayScore?: number;
+  } = {
+    status,
+    kickoffAt: new Date(am.utcDate),
+  };
+  if (await canAssignExternalId(target.id, am.id)) {
+    data.externalId = am.id;
+  }
+  if (hasScore) {
+    data.homeScore = homeScore!;
+    data.awayScore = awayScore!;
+  }
+
+  await prisma.match.update({ where: { id: target.id }, data });
   return {
     hasScore,
     shouldRecompute: hasScore || hadScore,
@@ -569,7 +586,7 @@ async function applyKnockoutUpdate(
   const hadScore = target.homeScore !== null && target.awayScore !== null;
 
   const data: {
-    externalId: number;
+    externalId?: number;
     kickoffAt: Date;
     homeTeamId?: number;
     awayTeamId?: number;
@@ -577,10 +594,10 @@ async function applyKnockoutUpdate(
     homeScore?: number | null;
     awayScore?: number | null;
     winnerTeamId?: number | null;
-  } = {
-    externalId: am.id,
-    kickoffAt: new Date(am.utcDate),
-  };
+  } = { kickoffAt: new Date(am.utcDate) };
+  if (await canAssignExternalId(target.id, am.id)) {
+    data.externalId = am.id;
+  }
   if (homeId) data.homeTeamId = homeId;
   if (awayId) data.awayTeamId = awayId;
 
@@ -597,11 +614,6 @@ async function applyKnockoutUpdate(
     finished = status === "FINISHED";
   } else if (teamsKnown) {
     data.status = status === "FINISHED" ? "SCHEDULED" : status;
-    if (hadScore) {
-      data.homeScore = null;
-      data.awayScore = null;
-      data.winnerTeamId = null;
-    }
   }
 
   await prisma.match.update({ where: { id: target.id }, data });
