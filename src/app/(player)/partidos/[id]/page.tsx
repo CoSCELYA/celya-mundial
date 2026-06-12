@@ -178,7 +178,7 @@ function ReadOnlyView({
   awayScore: number | null;
   prediction: { homeScore: number; awayScore: number } | null;
   triviaAnswer: { selectedOption: number; isCorrect: boolean } | null;
-  question: { text: string; options: string[] } | null;
+  question: { text: string; options: string[]; correctOption: number } | null;
 }) {
   return (
     <div className="space-y-4">
@@ -220,20 +220,27 @@ function ReadOnlyView({
           </p>
           <p className="text-sm font-semibold text-white">{question.text}</p>
           {triviaAnswer ? (
-            <div
-              className={`mt-3 inline-flex items-center gap-2 text-sm ${
-                triviaAnswer.isCorrect ? "text-success" : "text-danger"
-              }`}
-            >
-              {triviaAnswer.isCorrect ? (
-                <CheckCircle2 className="size-4 shrink-0" />
-              ) : (
-                <XCircle className="size-4 shrink-0" />
+            <div className="mt-3 space-y-2 text-sm">
+              <div
+                className={`inline-flex items-start gap-2 ${
+                  triviaAnswer.isCorrect ? "text-success" : "text-danger"
+                }`}
+              >
+                {triviaAnswer.isCorrect ? (
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
+                ) : (
+                  <XCircle className="mt-0.5 size-4 shrink-0" />
+                )}
+                <span>
+                  Tu respuesta:{" "}
+                  {question.options[triviaAnswer.selectedOption] ?? "—"}
+                </span>
+              </div>
+              {!triviaAnswer.isCorrect && (
+                <p className="pl-6 text-white/70">
+                  Respuesta correcta: {question.options[question.correctOption] ?? "—"}
+                </p>
               )}
-              <span>
-                Tu respuesta:{" "}
-                {question.options[triviaAnswer.selectedOption] ?? "—"}
-              </span>
             </div>
           ) : (
             <p className="mt-3 text-sm text-white/60">No respondiste la trivia.</p>

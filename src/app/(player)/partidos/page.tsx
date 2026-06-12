@@ -1,18 +1,31 @@
 import Link from "next/link";
-import type { Match, Prediction, Team } from "@prisma/client";
+import type { Match, Prediction, QuestionAnswer, Team } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getScoringConfig } from "@/lib/scoring";
 import { isPredictionOpen } from "@/lib/dates";
 import { PHASE_ORDER, PHASE_LABEL } from "@/lib/constants";
-import { CalendarDays, Lock, PencilLine, ArrowRight } from "lucide-react";
+import {
+  CalendarDays,
+  Lock,
+  PencilLine,
+  ArrowRight,
+  CheckCircle2,
+  XCircle,
+} from "lucide-react";
 import { Flag } from "@/components/flag";
 import { LocalTime } from "@/components/local-time";
 
 type MatchWithTeams = Match & {
   homeTeam: Team | null;
   awayTeam: Team | null;
-  question: { status: "ACTIVE" | "INACTIVE" } | null;
+  question: {
+    status: "ACTIVE" | "INACTIVE";
+    text: string;
+    options: string[];
+    correctOption: number;
+    answers: Pick<QuestionAnswer, "selectedOption" | "isCorrect">[];
+  } | null;
 };
 
 export default async function PartidosPage() {
@@ -20,7 +33,22 @@ export default async function PartidosPage() {
 
   const [matches, predictions, cfg] = await Promise.all([
     prisma.match.findMany({
-      include: { homeTeam: true, awayTeam: true, question: { select: { status: true } } },
+      include: {
+        homeTeam: true,
+        awayTeam: true,
+        question: {
+          select: {
+            status: true,
+            text: true,
+            options: true,
+            correctOption: true,
+            answers: {
+              where: { userId: session.userId },
+              select: { selectedOption: true, isCorrect: true },
+            },
+          },
+        },
+      },
       orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
     }),
     prisma.prediction.findMany({ where: { userId: session.userId } }),
@@ -90,6 +118,8 @@ function MatchCard({
   const hasRealScore = match.homeScore !== null && match.awayScore !== null;
   const predictionAvailable = open && match.question?.status === "ACTIVE";
   const unavailable = open && !predictionAvailable;
+  const triviaSummaryQuestion =
+    !open && match.question?.status === "ACTIVE" ? match.question : null;
 
   const tag =
     match.phase === "GROUP" && match.groupName
@@ -151,6 +181,15 @@ function MatchCard({
         </p>
       )}
 
+      {triviaSummaryQuestion && (
+        <TriviaSummary
+          text={triviaSummaryQuestion.text}
+          options={triviaSummaryQuestion.options}
+          correctOption={triviaSummaryQuestion.correctOption}
+          answer={triviaSummaryQuestion.answers[0] ?? null}
+        />
+      )}
+
       {predictionAvailable ? (
         <Link
           href={`/partidos/${match.id}`}
@@ -167,6 +206,51 @@ function MatchCard({
           Ver detalle
           <ArrowRight className="size-4" />
         </Link>
+      )}
+    </div>
+  );
+}
+
+function TriviaSummary({
+  text,
+  options,
+  correctOption,
+  answer,
+}: {
+  text: string;
+  options: string[];
+  correctOption: number;
+  answer: Pick<QuestionAnswer, "selectedOption" | "isCorrect"> | null;
+}) {
+  const userAnswer = answer ? options[answer.selectedOption] ?? "—" : null;
+  const correctAnswer = options[correctOption] ?? "—";
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-white/60">
+        Trivia
+      </p>
+      <p className="mt-1 text-sm font-semibold leading-snug text-white">{text}</p>
+      {answer ? (
+        <div className="mt-3 space-y-1.5 text-xs">
+          <p
+            className={`flex items-start gap-2 ${
+              answer.isCorrect ? "text-success" : "text-danger"
+            }`}
+          >
+            {answer.isCorrect ? (
+              <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
+            ) : (
+              <XCircle className="mt-0.5 size-3.5 shrink-0" />
+            )}
+            <span>Tu respuesta: {userAnswer}</span>
+          </p>
+          {!answer.isCorrect && (
+            <p className="pl-5 text-white/70">Respuesta correcta: {correctAnswer}</p>
+          )}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-white/60">No respondiste la trivia.</p>
       )}
     </div>
   );
