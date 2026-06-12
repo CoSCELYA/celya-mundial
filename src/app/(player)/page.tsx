@@ -3,7 +3,6 @@ import { Trophy, Medal, CalendarClock, ArrowRight } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getUserSummary, getChampionPick, getScoringConfig } from "@/lib/queries";
-import { isPredictionOpen } from "@/lib/dates";
 import { PHASE_LABEL } from "@/lib/constants";
 import { Flag } from "@/components/flag";
 import { LocalTime } from "@/components/local-time";
@@ -17,21 +16,19 @@ export default async function PlayerHomePage() {
     getScoringConfig(),
   ]);
 
-  // Upcoming matches with an open prediction window.
+  // Upcoming matches with an open prediction window and no prediction from this user.
   const now = new Date();
-  const upcoming = await prisma.match.findMany({
-    where: { kickoffAt: { gt: now } },
+  const predictionCutoff = new Date(now.getTime() + cfg.lockMinutes * 60_000);
+  const openMatches = await prisma.match.findMany({
+    where: {
+      kickoffAt: { gt: predictionCutoff },
+      question: { is: { status: "ACTIVE" } },
+      predictions: { none: { userId: s.userId } },
+    },
     include: { homeTeam: true, awayTeam: true, question: { select: { status: true } } },
     orderBy: { kickoffAt: "asc" },
-    take: 12,
+    take: 6,
   });
-  const openMatches = upcoming
-    .filter(
-      (m) =>
-        m.question?.status === "ACTIVE" &&
-        isPredictionOpen(m.kickoffAt, cfg.lockMinutes, now),
-    )
-    .slice(0, 6);
 
   return (
     <div className="space-y-8">
