@@ -369,7 +369,7 @@ export async function createQuestion(_prev: ActionState, fd: FormData): Promise<
     },
   });
 
-  revalidateAdmin(["/admin/preguntas", "/admin"]);
+  revalidateAdmin(["/admin/preguntas", "/admin", "/partidos", `/partidos/${parsed.data.matchId}`, "/"]);
   return { success: "Pregunta creada correctamente." };
 }
 
@@ -431,7 +431,14 @@ export async function updateQuestion(_prev: ActionState, fd: FormData): Promise<
     data: { isCorrect: false },
   });
 
-  revalidateAdmin(["/admin/preguntas", "/admin"]);
+  revalidateAdmin([
+    "/admin/preguntas",
+    "/admin",
+    "/partidos",
+    `/partidos/${current.matchId}`,
+    `/partidos/${parsed.data.matchId}`,
+    "/",
+  ]);
   return { success: "Pregunta actualizada correctamente." };
 }
 
@@ -452,7 +459,7 @@ export async function deleteQuestion(fd: FormData): Promise<void> {
 
   await prisma.question.delete({ where: { id } });
 
-  revalidateAdmin(["/admin/preguntas", "/admin"]);
+  revalidateAdmin(["/admin/preguntas", "/admin", "/partidos", `/partidos/${current.matchId}`, "/"]);
 }
 
 // ---------------------------------------------------------------------------

@@ -21,12 +21,16 @@ export default async function PlayerHomePage() {
   const now = new Date();
   const upcoming = await prisma.match.findMany({
     where: { kickoffAt: { gt: now } },
-    include: { homeTeam: true, awayTeam: true },
+    include: { homeTeam: true, awayTeam: true, question: { select: { status: true } } },
     orderBy: { kickoffAt: "asc" },
     take: 12,
   });
   const openMatches = upcoming
-    .filter((m) => isPredictionOpen(m.kickoffAt, cfg.lockMinutes, now))
+    .filter(
+      (m) =>
+        m.question?.status === "ACTIVE" &&
+        isPredictionOpen(m.kickoffAt, cfg.lockMinutes, now),
+    )
     .slice(0, 6);
 
   return (

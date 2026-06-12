@@ -12,6 +12,7 @@ import { LocalTime } from "@/components/local-time";
 type MatchWithTeams = Match & {
   homeTeam: Team | null;
   awayTeam: Team | null;
+  question: { status: "ACTIVE" | "INACTIVE" } | null;
 };
 
 export default async function PartidosPage() {
@@ -19,7 +20,7 @@ export default async function PartidosPage() {
 
   const [matches, predictions, cfg] = await Promise.all([
     prisma.match.findMany({
-      include: { homeTeam: true, awayTeam: true },
+      include: { homeTeam: true, awayTeam: true, question: { select: { status: true } } },
       orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
     }),
     prisma.prediction.findMany({ where: { userId: session.userId } }),
@@ -87,6 +88,8 @@ function MatchCard({
 }) {
   const finished = match.status === "FINISHED";
   const hasRealScore = match.homeScore !== null && match.awayScore !== null;
+  const predictionAvailable = open && match.question?.status === "ACTIVE";
+  const unavailable = open && !predictionAvailable;
 
   const tag =
     match.phase === "GROUP" && match.groupName
@@ -99,7 +102,7 @@ function MatchCard({
         <span className="text-[11px] font-semibold uppercase tracking-wide text-white/60">
           {tag}
         </span>
-        <StateChip open={open} finished={finished} />
+        <StateChip open={open} finished={finished} disabled={unavailable} />
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -142,7 +145,13 @@ function MatchCard({
         <p className="text-xs text-white/50">Aún no has pronosticado este partido.</p>
       )}
 
-      {open ? (
+      {unavailable && (
+        <p className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/60">
+          La pregunta está deshabilitada por el momento.
+        </p>
+      )}
+
+      {predictionAvailable ? (
         <Link
           href={`/partidos/${match.id}`}
           className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[10px] bg-accent px-4 text-sm font-semibold text-accent-foreground transition-opacity hover:opacity-90"
@@ -211,7 +220,15 @@ function ScoreRow({
   );
 }
 
-function StateChip({ open, finished }: { open: boolean; finished: boolean }) {
+function StateChip({
+  open,
+  finished,
+  disabled,
+}: {
+  open: boolean;
+  finished: boolean;
+  disabled: boolean;
+}) {
   if (finished) {
     return (
       <span className="rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white/70">
@@ -220,6 +237,15 @@ function StateChip({ open, finished }: { open: boolean; finished: boolean }) {
     );
   }
   if (open) {
+    if (disabled) {
+      return (
+        <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-white/70">
+          <Lock className="size-3" />
+          Deshabilitado
+        </span>
+      );
+    }
+
     return (
       <span className="rounded-full bg-accent/20 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
         Abierto

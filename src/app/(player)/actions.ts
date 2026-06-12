@@ -88,6 +88,12 @@ export async function savePrediction(_prev: ActionState, fd: FormData): Promise<
   });
   if (!match) return { error: "El partido no existe." };
   if (!match.question) return { error: "Este partido no tiene pregunta de trivia." };
+  if (match.question.status !== "ACTIVE") {
+    return {
+      error:
+        "La pregunta de este partido está deshabilitada por el momento. Aún no puedes registrar tu marcador.",
+    };
+  }
 
   const answer = await prisma.questionAnswer.findUnique({
     where: { userId_questionId: { userId: s.userId, questionId: match.question.id } },

@@ -102,7 +102,7 @@ export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMa
       }
 
       // Trivia points for correct answers to this match's question.
-      if (match.question) {
+      if (match.question?.status === "ACTIVE") {
         for (const ans of match.question.answers) {
           if (ans.isCorrect) {
             await tx.pointsEntry.create({

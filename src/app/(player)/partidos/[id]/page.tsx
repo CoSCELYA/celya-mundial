@@ -47,7 +47,10 @@ export default async function PartidoDetallePage({
 
   const prediction = match.predictions[0] ?? null;
   const question = match.question;
+  const activeQuestion = question?.status === "ACTIVE" ? question : null;
+  const questionDisabled = question?.status === "INACTIVE";
   const triviaAnswer = question?.answers[0] ?? null;
+  const activeTriviaAnswer = activeQuestion ? triviaAnswer : null;
 
   const homeName = match.homeTeam?.name ?? "Por definir";
   const awayName = match.awayTeam?.name ?? "Por definir";
@@ -122,17 +125,22 @@ export default async function PartidoDetallePage({
           homeScore={match.homeScore}
           awayScore={match.awayScore}
           prediction={prediction}
-          triviaAnswer={triviaAnswer}
-          question={question}
+          triviaAnswer={activeTriviaAnswer}
+          question={activeQuestion}
         />
       ) : !teamsDefined ? (
         <InfoBox>
           Este partido aún no tiene equipos definidos. Vuelve cuando se conozcan los rivales.
         </InfoBox>
+      ) : questionDisabled ? (
+        <InfoBox>
+          La pregunta de este partido está deshabilitada por el momento. Aún no puedes
+          responder la trivia ni registrar tu marcador.
+        </InfoBox>
       ) : !question ? (
         <InfoBox>Este partido todavía no tiene una pregunta de trivia disponible.</InfoBox>
-      ) : !triviaAnswer ? (
-        <TriviaForm matchId={match.id} text={question.text} options={question.options} />
+      ) : !activeTriviaAnswer ? (
+        <TriviaForm matchId={match.id} text={activeQuestion!.text} options={activeQuestion!.options} />
       ) : (
         <div className="space-y-4">
           <div className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
