@@ -431,10 +431,10 @@ function isCurrentEspnEvent(event: EspnEvent, now: Date): boolean {
   return now.getTime() - kickoff <= ESPN_FINISHED_TAIL_MS && now.getTime() >= kickoff;
 }
 
-async function findEspnCurrentSyncTarget(
+async function findEspnCurrentEventTarget(
   now: Date,
   resolveTeam: TeamResolver,
-): Promise<Target | null> {
+): Promise<{ target: Target; event: EspnEvent } | null> {
   const events = await fetchEspnEventsAround(now);
   const candidates = events
     .filter((event) => isCurrentEspnEvent(event, now))
@@ -474,7 +474,7 @@ async function findEspnCurrentSyncTarget(
       },
       orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
     });
-    if (target) return target;
+    if (target) return { target, event };
   }
 
   return null;
@@ -522,14 +522,11 @@ function findEspnEventForTarget(
   return null;
 }
 
-async function applyEspnFallbackUpdate(
+async function applyEspnEventUpdate(
   target: Target,
+  event: EspnEvent,
   resolveTeam: TeamResolver,
 ): Promise<ApplyResult | null> {
-  const events = await fetchEspnEventsForDate(target.kickoffAt);
-  const event = findEspnEventForTarget(target, events, resolveTeam);
-  if (!event) return null;
-
   const competitors = event.competitions?.[0]?.competitors ?? [];
   const home = competitors.find((c) => c.homeAway === "home");
   const away = competitors.find((c) => c.homeAway === "away");
@@ -589,6 +586,16 @@ async function applyEspnFallbackUpdate(
   };
 }
 
+async function applyEspnFallbackUpdate(
+  target: Target,
+  resolveTeam: TeamResolver,
+): Promise<ApplyResult | null> {
+  const events = await fetchEspnEventsAround(target.kickoffAt);
+  const event = findEspnEventForTarget(target, events, resolveTeam);
+  if (!event) return null;
+  return applyEspnEventUpdate(target, event, resolveTeam);
+}
+
 export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<SyncResult> {
   const token = process.env.FOOTBALL_DATA_TOKEN;
   if (!token) {
@@ -596,8 +603,8 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
   }
 
   const resolveTeam = await createTeamResolver();
-  const target =
-    (await findEspnCurrentSyncTarget(now, resolveTeam)) ?? (await getCurrentSyncTarget(now));
+  const currentEspnTarget = await findEspnCurrentEventTarget(now, resolveTeam);
+  const target = currentEspnTarget?.target ?? (await getCurrentSyncTarget(now));
   if (!target) {
     return withClosedTrivia(emptyResult(true, "Sin partido actual; no se consulto la API."), now);
   }
@@ -653,6 +660,42 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
       console.error("[sync] Error consultando fallback ESPN tras api-unmatched", error);
     }
 
+    if (currentEspnTarget) {
+      try {
+        const fallback = await applyEspnEventUpdate(
+          currentEspnTarget.target,
+          currentEspnTarget.event,
+          resolveTeam,
+        );
+        if (fallback?.hasScore) {
+          const { scoring, errors } = await recomputeStoredScore(
+            currentEspnTarget.target.id,
+            "api-unmatched-current-espn",
+          );
+          return withClosedTrivia({
+            ...emptyResult(
+              errors === 0,
+              "No se encontro en la API el partido actual; se aplico evento en vivo ESPN.",
+            ),
+            source: "espn-fallback",
+            selectedMatch: selectedMatchDebug(currentEspnTarget.target),
+            appliedScore: fallback.appliedScore,
+            fetched: fetched.matches.length,
+            matchesUpdated: 1,
+            teamsAssigned: fallback.assigned,
+            scoresUpdated: 1,
+            predictionsScored: scoring.predictionsScored,
+            pointsEntriesCreated: scoring.pointsEntriesCreated,
+            totalPointsCreated: scoring.totalPointsCreated,
+            unmatched: fallback.teamsKnown ? 0 : 1,
+            errors,
+          }, now, [currentEspnTarget.target.id]);
+        }
+      } catch (error) {
+        console.error("[sync] Error aplicando evento en vivo ESPN tras api-unmatched", error);
+      }
+    }
+
     if (hasStoredScore(target)) {
       const { scoring, errors } = await recomputeStoredScore(target.id, "api-unmatched");
       return withClosedTrivia({
@@ -670,6 +713,7 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
     }
     return withClosedTrivia({
       ...emptyResult(true, "No se encontro en la API el partido actual."),
+      selectedMatch: selectedMatchDebug(target),
       fetched: fetched.matches.length,
       unmatched: 1,
     }, now);
