@@ -1,12 +1,19 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import type { ScoringConfig } from "@prisma/client";
+import type { Prisma, ScoringConfig } from "@prisma/client";
 
 export type RecomputeMatchPointsResult = {
   hasScore: boolean;
   predictionsScored: number;
   pointsEntriesCreated: number;
   totalPointsCreated: number;
+};
+
+export type RecomputeClosedTriviaResult = {
+  matchesChecked: number;
+  pointsEntriesCreated: number;
+  totalPointsCreated: number;
+  errors: number;
 };
 
 /** Return the singleton scoring config, creating defaults if missing. */
@@ -33,6 +40,92 @@ export function predictionPoints(
     return { points: cfg.resultPts, type: "RESULT" };
   }
   return { points: 0, type: null };
+}
+
+async function recomputeTriviaPointsInTransaction(
+  tx: Prisma.TransactionClient,
+  matchId: number,
+  cfg: Pick<ScoringConfig, "triviaPts">,
+): Promise<{ pointsEntriesCreated: number; totalPointsCreated: number }> {
+  await tx.pointsEntry.deleteMany({ where: { matchId, type: "TRIVIA" } });
+
+  const question = await tx.question.findUnique({
+    where: { matchId },
+    include: { answers: true },
+  });
+  if (question?.status !== "ACTIVE") {
+    return { pointsEntriesCreated: 0, totalPointsCreated: 0 };
+  }
+
+  let pointsEntriesCreated = 0;
+  let totalPointsCreated = 0;
+  for (const ans of question.answers) {
+    if (!ans.isCorrect) continue;
+
+    await tx.pointsEntry.create({
+      data: { userId: ans.userId, matchId, type: "TRIVIA", points: cfg.triviaPts },
+    });
+    pointsEntriesCreated++;
+    totalPointsCreated += cfg.triviaPts;
+  }
+
+  return { pointsEntriesCreated, totalPointsCreated };
+}
+
+export async function recomputeTriviaPoints(matchId: number): Promise<RecomputeMatchPointsResult> {
+  const cfg = await getScoringConfig();
+
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
+      const trivia = await recomputeTriviaPointsInTransaction(tx, matchId, cfg);
+
+      return {
+        hasScore: false,
+        predictionsScored: 0,
+        pointsEntriesCreated: trivia.pointsEntriesCreated,
+        totalPointsCreated: trivia.totalPointsCreated,
+      };
+    },
+    { maxWait: 20_000, timeout: 20_000 },
+  );
+}
+
+export async function recomputeClosedTriviaPoints(
+  now: Date = new Date(),
+  excludeMatchIds: number[] = [],
+): Promise<RecomputeClosedTriviaResult> {
+  const cfg = await getScoringConfig();
+  const closedDeadlineThreshold = new Date(now.getTime() + cfg.lockMinutes * 60_000);
+  const matches = await prisma.match.findMany({
+    where: {
+      kickoffAt: { lte: closedDeadlineThreshold },
+      question: { isNot: null },
+      ...(excludeMatchIds.length > 0 ? { id: { notIn: excludeMatchIds } } : {}),
+    },
+    select: { id: true },
+    orderBy: [{ kickoffAt: "asc" }, { id: "asc" }],
+  });
+
+  const result: RecomputeClosedTriviaResult = {
+    matchesChecked: matches.length,
+    pointsEntriesCreated: 0,
+    totalPointsCreated: 0,
+    errors: 0,
+  };
+
+  for (const match of matches) {
+    try {
+      const scoring = await recomputeTriviaPoints(match.id);
+      result.pointsEntriesCreated += scoring.pointsEntriesCreated;
+      result.totalPointsCreated += scoring.totalPointsCreated;
+    } catch (error) {
+      console.error(`[scoring] Error recalculando trivia cerrada (${match.id})`, error);
+      result.errors++;
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -65,20 +158,23 @@ export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMa
         };
       }
 
-      // Clear previous derived points for this match.
-      await tx.pointsEntry.deleteMany({ where: { matchId } });
+      // Clear previous score-derived points for this match.
+      await tx.pointsEntry.deleteMany({
+        where: { matchId, type: { in: ["EXACT", "RESULT"] } },
+      });
       await tx.prediction.updateMany({
         where: { matchId },
         data: { pointsAwarded: null, scoredAt: null },
       });
 
       const hasScore = match.homeScore !== null && match.awayScore !== null;
+      const trivia = await recomputeTriviaPointsInTransaction(tx, matchId, cfg);
       if (!hasScore) {
         return {
           hasScore: false,
           predictionsScored: 0,
-          pointsEntriesCreated: 0,
-          totalPointsCreated: 0,
+          pointsEntriesCreated: trivia.pointsEntriesCreated,
+          totalPointsCreated: trivia.totalPointsCreated,
         };
       }
 
@@ -101,18 +197,8 @@ export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMa
         }
       }
 
-      // Trivia points for correct answers to this match's question.
-      if (match.question?.status === "ACTIVE") {
-        for (const ans of match.question.answers) {
-          if (ans.isCorrect) {
-            await tx.pointsEntry.create({
-              data: { userId: ans.userId, matchId, type: "TRIVIA", points: cfg.triviaPts },
-            });
-            pointsEntriesCreated++;
-            totalPointsCreated += cfg.triviaPts;
-          }
-        }
-      }
+      pointsEntriesCreated += trivia.pointsEntriesCreated;
+      totalPointsCreated += trivia.totalPointsCreated;
 
       return {
         hasScore: true,

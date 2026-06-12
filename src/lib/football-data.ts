@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import {
   recomputeMatchPoints,
   recomputeChampionPoints,
+  recomputeClosedTriviaPoints,
   type RecomputeMatchPointsResult,
 } from "@/lib/scoring";
 
@@ -198,6 +199,35 @@ function emptyResult(ok: boolean, message: string): SyncResult {
     unmatched: 0,
     unknownStages: 0,
     errors: 0,
+  };
+}
+
+async function withClosedTrivia(
+  result: SyncResult,
+  now: Date,
+  excludeMatchIds: number[] = [],
+): Promise<SyncResult> {
+  const trivia = await recomputeClosedTriviaPoints(now, excludeMatchIds);
+  if (
+    trivia.matchesChecked === 0 &&
+    trivia.pointsEntriesCreated === 0 &&
+    trivia.totalPointsCreated === 0 &&
+    trivia.errors === 0
+  ) {
+    return result;
+  }
+
+  const suffix =
+    ` Trivia cerrada: ${trivia.pointsEntriesCreated} entradas` +
+    (trivia.errors > 0 ? `, ${trivia.errors} errores.` : ".");
+
+  return {
+    ...result,
+    ok: result.ok && trivia.errors === 0,
+    message: `${result.message} ${suffix}`,
+    pointsEntriesCreated: result.pointsEntriesCreated + trivia.pointsEntriesCreated,
+    totalPointsCreated: result.totalPointsCreated + trivia.totalPointsCreated,
+    errors: result.errors + trivia.errors,
   };
 }
 
@@ -562,14 +592,14 @@ async function applyEspnFallbackUpdate(
 export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<SyncResult> {
   const token = process.env.FOOTBALL_DATA_TOKEN;
   if (!token) {
-    return emptyResult(false, "FOOTBALL_DATA_TOKEN no esta configurado.");
+    return withClosedTrivia(emptyResult(false, "FOOTBALL_DATA_TOKEN no esta configurado."), now);
   }
 
   const resolveTeam = await createTeamResolver();
   const target =
     (await findEspnCurrentSyncTarget(now, resolveTeam)) ?? (await getCurrentSyncTarget(now));
   if (!target) {
-    return emptyResult(true, "Sin partido actual; no se consulto la API.");
+    return withClosedTrivia(emptyResult(true, "Sin partido actual; no se consulto la API."), now);
   }
 
   const url = target.externalId
@@ -582,16 +612,16 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
   if (!fetched.ok) {
     if (hasStoredScore(target)) {
       const { scoring, errors } = await recomputeStoredScore(target.id, "api-error");
-      return {
+      return withClosedTrivia({
         ...fetched.result,
         message: `${fetched.result.message} Se recalculo el marcador local guardado.`,
         predictionsScored: scoring.predictionsScored,
         pointsEntriesCreated: scoring.pointsEntriesCreated,
         totalPointsCreated: scoring.totalPointsCreated,
         errors: fetched.result.errors + errors,
-      };
+      }, now, [target.id]);
     }
-    return fetched.result;
+    return withClosedTrivia(fetched.result, now);
   }
 
   const apiMatch = findApiMatchForTarget(target, fetched.matches, resolveTeam);
@@ -600,7 +630,7 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
       const fallback = await applyEspnFallbackUpdate(target, resolveTeam);
       if (fallback?.hasScore) {
         const { scoring, errors } = await recomputeStoredScore(target.id, "api-unmatched-espn");
-        return {
+        return withClosedTrivia({
           ...emptyResult(
             errors === 0,
             "No se encontro en la API el partido actual; se aplico marcador ESPN.",
@@ -617,7 +647,7 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
           totalPointsCreated: scoring.totalPointsCreated,
           unmatched: fallback.teamsKnown ? 0 : 1,
           errors,
-        };
+        }, now, [target.id]);
       }
     } catch (error) {
       console.error("[sync] Error consultando fallback ESPN tras api-unmatched", error);
@@ -625,7 +655,7 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
 
     if (hasStoredScore(target)) {
       const { scoring, errors } = await recomputeStoredScore(target.id, "api-unmatched");
-      return {
+      return withClosedTrivia({
         ...emptyResult(errors === 0, "No se encontro en la API el partido actual; se recalculo el marcador local guardado."),
         source: "local-score",
         selectedMatch: selectedMatchDebug(target),
@@ -636,20 +666,20 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
         totalPointsCreated: scoring.totalPointsCreated,
         unmatched: 1,
         errors,
-      };
+      }, now, [target.id]);
     }
-    return {
+    return withClosedTrivia({
       ...emptyResult(true, "No se encontro en la API el partido actual."),
       fetched: fetched.matches.length,
       unmatched: 1,
-    };
+    }, now);
   }
 
   const phase = STAGE_TO_PHASE[apiMatch.stage];
   if (!phase) {
     if (hasStoredScore(target)) {
       const { scoring, errors } = await recomputeStoredScore(target.id, "unknown-stage");
-      return {
+      return withClosedTrivia({
         ...emptyResult(errors === 0, `Fase desconocida en la API: ${apiMatch.stage}. Se recalculo el marcador local guardado.`),
         fetched: fetched.matches.length,
         predictionsScored: scoring.predictionsScored,
@@ -657,13 +687,13 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
         totalPointsCreated: scoring.totalPointsCreated,
         unknownStages: 1,
         errors,
-      };
+      }, now, [target.id]);
     }
-    return {
+    return withClosedTrivia({
       ...emptyResult(true, `Fase desconocida en la API: ${apiMatch.stage}.`),
       fetched: fetched.matches.length,
       unknownStages: 1,
-    };
+    }, now);
   }
 
   const h = resolveTeam(apiMatch.homeTeam);
@@ -674,7 +704,7 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
     if (!h || !a) {
       if (hasStoredScore(target)) {
         const { scoring, errors } = await recomputeStoredScore(target.id, "teams-unmatched");
-        return {
+        return withClosedTrivia({
           ...emptyResult(errors === 0, "No se pudieron emparejar los equipos del partido actual; se recalculo el marcador local guardado."),
           fetched: fetched.matches.length,
           predictionsScored: scoring.predictionsScored,
@@ -682,13 +712,13 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
           totalPointsCreated: scoring.totalPointsCreated,
           unmatched: 1,
           errors,
-        };
+        }, now, [target.id]);
       }
-      return {
+      return withClosedTrivia({
         ...emptyResult(true, "No se pudieron emparejar los equipos del partido actual."),
         fetched: fetched.matches.length,
         unmatched: 1,
-      };
+      }, now);
     }
     result = await applyUpdate(target, apiMatch, h);
   } else {
@@ -724,7 +754,7 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
     }
   }
 
-  return {
+  return withClosedTrivia({
     ok: true,
     message:
       `Sincronizacion del partido actual completa: ${result.hasScore ? 1 : 0} marcador` +
@@ -743,17 +773,17 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
     unmatched: result.teamsKnown ? 0 : 1,
     unknownStages: 0,
     errors,
-  };
+  }, now, result.shouldRecompute ? [target.id] : []);
 }
 
 export async function syncWorldCup(): Promise<SyncResult> {
   const token = process.env.FOOTBALL_DATA_TOKEN;
   if (!token) {
-    return emptyResult(false, "FOOTBALL_DATA_TOKEN no esta configurado.");
+    return withClosedTrivia(emptyResult(false, "FOOTBALL_DATA_TOKEN no esta configurado."), new Date());
   }
 
   const fetched = await fetchApiMatches(token, `${BASE}/competitions/${COMPETITION}/matches`);
-  if (!fetched.ok) return fetched.result;
+  if (!fetched.ok) return withClosedTrivia(fetched.result, new Date());
 
   const resolveTeam = await createTeamResolver();
   const ourMatches = await prisma.match.findMany({ orderBy: { kickoffAt: "asc" } });
@@ -883,7 +913,7 @@ export async function syncWorldCup(): Promise<SyncResult> {
     extras.push(`${unknownStages} con fase desconocida (${[...unknownStageSet].join(", ")})`);
   if (errors > 0) extras.push(`${errors} con error`);
 
-  return {
+  return withClosedTrivia({
     ok: errors === 0,
     message:
       `Sincronizacion completa: ${matchesUpdated} partidos actualizados, ` +
@@ -899,7 +929,7 @@ export async function syncWorldCup(): Promise<SyncResult> {
     unmatched,
     unknownStages,
     errors,
-  };
+  }, new Date(), [...affectedForPoints]);
 }
 
 function resolveWinner(
