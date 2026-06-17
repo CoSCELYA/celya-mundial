@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Trophy, Medal, X, Target, CheckCircle2, HelpCircle, Crown } from "lucide-react";
 import type { PointsType } from "@prisma/client";
 
@@ -132,7 +133,9 @@ function BreakdownDialog({ row, onClose }: { row: Row; onClose: () => void }) {
       b.type === "EXACT" || b.type === "RESULT" || b.type === "TRIVIA" || b.data.points > 0,
   );
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} aria-hidden />
       <div className="relative z-10 w-full max-w-sm rounded-xl border border-white/10 bg-[#0c1530] p-6 text-white shadow-xl">
@@ -189,6 +192,7 @@ function BreakdownDialog({ row, onClose }: { row: Row; onClose: () => void }) {
           <span className="tnum text-lg font-bold text-accent">{row.totalPoints} pts</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
