@@ -1,6 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { getScoringConfig } from "@/lib/scoring";
+import type { PointsType } from "@prisma/client";
+
+/** Desglose de cómo se ganaron los puntos, por categoría. */
+export type PointsBreakdown = Record<PointsType, { count: number; points: number }>;
 
 export type StandingRow = {
   rank: number;
@@ -9,9 +13,20 @@ export type StandingRow = {
   email: string;
   totalPoints: number;
   exactCount: number;
+  breakdown: PointsBreakdown;
   champion: { name: string; flagEmoji: string; fifaCode: string } | null;
   runnerUp: { name: string; flagEmoji: string; fifaCode: string } | null;
 };
+
+function emptyBreakdown(): PointsBreakdown {
+  return {
+    EXACT: { count: 0, points: 0 },
+    RESULT: { count: 0, points: 0 },
+    TRIVIA: { count: 0, points: 0 },
+    CHAMPION: { count: 0, points: 0 },
+    RUNNERUP: { count: 0, points: 0 },
+  };
+}
 
 /** Full ranking of EMPLEADO users by accumulated points (with tiebreakers). */
 export async function getStandings(): Promise<StandingRow[]> {
@@ -26,14 +41,20 @@ export async function getStandings(): Promise<StandingRow[]> {
   });
 
   const rows = users.map((u) => {
+    const breakdown = emptyBreakdown();
+    for (const e of u.pointsLog) {
+      breakdown[e.type].count += 1;
+      breakdown[e.type].points += e.points;
+    }
     const totalPoints = u.pointsLog.reduce((s, e) => s + e.points, 0);
-    const exactCount = u.pointsLog.filter((e) => e.type === "EXACT").length;
+    const exactCount = breakdown.EXACT.count;
     return {
       userId: u.id,
       fullName: u.fullName,
       email: u.email,
       totalPoints,
       exactCount,
+      breakdown,
       champion: u.championPick
         ? {
             name: u.championPick.championTeam.name,
