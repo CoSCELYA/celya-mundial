@@ -80,13 +80,16 @@ export default async function ReglasPage() {
               deportivo).
             </li>
             <li>
+              <strong className="text-white">Más resultados acertados</strong>.
+            </li>
+            <li>
               <strong className="text-white">Aleatorio</strong>, rebarajado cada vez que se
               recalculan los puntos.
             </li>
           </ol>
           <p className="mt-4 text-xs leading-relaxed text-white/50">
-            El criterio aleatorio solo decide cuando dos jugadores quedan iguales en puntos y en
-            marcadores exactos.
+            El criterio aleatorio solo decide cuando dos jugadores quedan iguales en puntos,
+            marcadores exactos y resultados acertados.
           </p>
         </Section>
 

@@ -13,6 +13,7 @@ export type StandingRow = {
   email: string;
   totalPoints: number;
   exactCount: number;
+  resultCount: number;
   tiebreaker: number;
   breakdown: PointsBreakdown;
   champion: { name: string; flagEmoji: string; fifaCode: string } | null;
@@ -49,12 +50,14 @@ export async function getStandings(): Promise<StandingRow[]> {
     }
     const totalPoints = u.pointsLog.reduce((s, e) => s + e.points, 0);
     const exactCount = breakdown.EXACT.count;
+    const resultCount = breakdown.RESULT.count;
     return {
       userId: u.id,
       fullName: u.fullName,
       email: u.email,
       totalPoints,
       exactCount,
+      resultCount,
       tiebreaker: u.tiebreaker,
       breakdown,
       champion: u.championPick
@@ -78,6 +81,7 @@ export async function getStandings(): Promise<StandingRow[]> {
     (a, b) =>
       b.totalPoints - a.totalPoints ||
       b.exactCount - a.exactCount ||
+      b.resultCount - a.resultCount ||
       // Desempate aleatorio (se rebaraja al recalcular puntos), reemplaza el
       // antiguo orden alfabético.
       a.tiebreaker - b.tiebreaker,
