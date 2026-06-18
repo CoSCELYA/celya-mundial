@@ -1,7 +1,7 @@
 import { requireSession } from "@/lib/auth";
 import { getScoringConfig } from "@/lib/scoring";
 import { PHASE_LABEL } from "@/lib/constants";
-import { BookOpen, ClipboardList, Crown, HandHeart, Target } from "lucide-react";
+import { BookOpen, ClipboardList, Crown, HandHeart, ListOrdered, Target } from "lucide-react";
 
 function lockLabel(minutes: number): string {
   if (minutes <= 0) return "el inicio del partido";
@@ -61,6 +61,32 @@ export default async function ReglasPage() {
           <p className="mt-4 text-xs leading-relaxed text-white/50">
             El marcador exacto y el resultado acertado no se suman entre sí: cada partido otorga el
             mayor de los dos.
+          </p>
+        </Section>
+
+        <Section
+          icon={<ListOrdered className="size-5 text-accent" />}
+          title="Posiciones y desempates"
+        >
+          <p className="text-sm leading-relaxed text-white/80">
+            La tabla de posiciones se ordena así:
+          </p>
+          <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-white/80 marker:font-semibold marker:text-accent">
+            <li>
+              <strong className="text-white">Puntos totales</strong> (de mayor a menor).
+            </li>
+            <li>
+              <strong className="text-white">Más marcadores exactos</strong> (desempate
+              deportivo).
+            </li>
+            <li>
+              <strong className="text-white">Aleatorio</strong>, rebarajado cada vez que se
+              recalculan los puntos.
+            </li>
+          </ol>
+          <p className="mt-4 text-xs leading-relaxed text-white/50">
+            El criterio aleatorio solo decide cuando dos jugadores quedan iguales en puntos y en
+            marcadores exactos.
           </p>
         </Section>
 

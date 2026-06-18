@@ -61,6 +61,10 @@ model User {
   role         Role       @default(EMPLEADO)
   status       UserStatus @default(ACTIVE)
   avatarUrl    String?
+  // Desempate aleatorio de la tabla: se reasigna cada vez que se recalculan
+  // puntos (ver reshuffleTiebreakers en lib/scoring), de modo que los empates
+  // se rebarajan al cerrar partidos en lugar de ordenarse alfabéticamente.
+  tiebreaker   Float      @default(dbgenerated("random()"))
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 

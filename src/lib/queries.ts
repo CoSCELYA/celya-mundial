@@ -13,6 +13,7 @@ export type StandingRow = {
   email: string;
   totalPoints: number;
   exactCount: number;
+  tiebreaker: number;
   breakdown: PointsBreakdown;
   champion: { name: string; flagEmoji: string; fifaCode: string } | null;
   runnerUp: { name: string; flagEmoji: string; fifaCode: string } | null;
@@ -54,6 +55,7 @@ export async function getStandings(): Promise<StandingRow[]> {
       email: u.email,
       totalPoints,
       exactCount,
+      tiebreaker: u.tiebreaker,
       breakdown,
       champion: u.championPick
         ? {
@@ -76,7 +78,9 @@ export async function getStandings(): Promise<StandingRow[]> {
     (a, b) =>
       b.totalPoints - a.totalPoints ||
       b.exactCount - a.exactCount ||
-      a.fullName.localeCompare(b.fullName),
+      // Desempate aleatorio (se rebaraja al recalcular puntos), reemplaza el
+      // antiguo orden alfabético.
+      a.tiebreaker - b.tiebreaker,
   );
 
   return rows.map((r, i) => ({ rank: i + 1, ...r }));

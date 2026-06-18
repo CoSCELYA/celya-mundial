@@ -27,6 +27,15 @@ function outcome(home: number, away: number): number {
   return Math.sign(home - away); // 1 home win, 0 draw, -1 away win
 }
 
+/**
+ * Reasigna el desempate aleatorio de todos los usuarios. Se llama tras cada
+ * recálculo de puntos para que los empates en la tabla se rebarajen al cerrar
+ * partidos, en lugar de quedar fijos por orden alfabético.
+ */
+export async function reshuffleTiebreakers(): Promise<void> {
+  await prisma.$executeRaw`UPDATE "User" SET "tiebreaker" = random()`;
+}
+
 /** Points for a single prediction vs the current official score. */
 export function predictionPoints(
   pred: { homeScore: number; awayScore: number },
@@ -75,7 +84,7 @@ async function recomputeTriviaPointsInTransaction(
 export async function recomputeTriviaPoints(matchId: number): Promise<RecomputeMatchPointsResult> {
   const cfg = await getScoringConfig();
 
-  return prisma.$transaction(
+  const result = await prisma.$transaction(
     async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${matchId})`;
       const trivia = await recomputeTriviaPointsInTransaction(tx, matchId, cfg);
@@ -89,6 +98,9 @@ export async function recomputeTriviaPoints(matchId: number): Promise<RecomputeM
     },
     { maxWait: 20_000, timeout: 20_000 },
   );
+
+  await reshuffleTiebreakers();
+  return result;
 }
 
 export async function recomputeClosedTriviaPoints(
@@ -136,7 +148,7 @@ export async function recomputeClosedTriviaPoints(
 export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMatchPointsResult> {
   const cfg = await getScoringConfig();
 
-  return prisma.$transaction(
+  const result = await prisma.$transaction(
     async (tx) => {
       // Serializa recomputes concurrentes del mismo partido (cron + carga manual)
       // para que dos transacciones no dupliquen entradas de puntos.
@@ -209,6 +221,9 @@ export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMa
     },
     { maxWait: 20_000, timeout: 20_000 },
   );
+
+  await reshuffleTiebreakers();
+  return result;
 }
 
 /**
@@ -269,6 +284,8 @@ export async function recomputeChampionPoints(): Promise<void> {
       }
     }
   });
+
+  await reshuffleTiebreakers();
 }
 
 /** Whether the champion/runner-up pick is still editable (before lock phase begins). */
