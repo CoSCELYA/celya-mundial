@@ -61,25 +61,28 @@ async function recomputeTriviaPointsInTransaction(
 
   const question = await tx.question.findUnique({
     where: { matchId },
-    include: { answers: true },
+    include: { answers: { where: { isCorrect: true } } },
   });
   if (question?.status !== "ACTIVE") {
     return { pointsEntriesCreated: 0, totalPointsCreated: 0 };
   }
 
-  let pointsEntriesCreated = 0;
-  let totalPointsCreated = 0;
-  for (const ans of question.answers) {
-    if (!ans.isCorrect) continue;
-
-    await tx.pointsEntry.create({
-      data: { userId: ans.userId, matchId, type: "TRIVIA", points: cfg.triviaPts },
+  // Inserción por lotes (no fila por fila) para que el recálculo sea rápido.
+  if (question.answers.length > 0) {
+    await tx.pointsEntry.createMany({
+      data: question.answers.map((ans) => ({
+        userId: ans.userId,
+        matchId,
+        type: "TRIVIA" as const,
+        points: cfg.triviaPts,
+      })),
     });
-    pointsEntriesCreated++;
-    totalPointsCreated += cfg.triviaPts;
   }
 
-  return { pointsEntriesCreated, totalPointsCreated };
+  return {
+    pointsEntriesCreated: question.answers.length,
+    totalPointsCreated: question.answers.length * cfg.triviaPts,
+  };
 }
 
 export async function recomputeTriviaPoints(matchId: number): Promise<RecomputeMatchPointsResult> {
@@ -109,10 +112,14 @@ export async function recomputeClosedTriviaPoints(
 ): Promise<RecomputeClosedTriviaResult> {
   const cfg = await getScoringConfig();
   const closedDeadlineThreshold = new Date(now.getTime() + cfg.lockMinutes * 60_000);
+  // Solo partidos cerrados que aún NO tienen puntos de trivia: tras el deadline
+  // las respuestas quedan bloqueadas, así que una vez calificado un partido no
+  // hay que recalcularlo. Esto evita reprocesar miles de entradas en cada cron.
   const matches = await prisma.match.findMany({
     where: {
       kickoffAt: { lte: closedDeadlineThreshold },
-      question: { isNot: null },
+      question: { is: { status: "ACTIVE" } },
+      pointsLog: { none: { type: "TRIVIA" } },
       ...(excludeMatchIds.length > 0 ? { id: { notIn: excludeMatchIds } } : {}),
     },
     select: { id: true },
