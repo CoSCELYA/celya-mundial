@@ -51,3 +51,24 @@ export function predictionDeadline(kickoff: Date, lockMinutes: number): Date {
 export function isPredictionOpen(kickoff: Date, lockMinutes: number, now = new Date()): boolean {
   return now.getTime() < predictionDeadline(kickoff, lockMinutes).getTime();
 }
+
+/**
+ * Separa los partidos en "próximos o en juego" y "ya jugados".
+ * En juego (LIVE) o con inicio futuro → upcoming; el resto → past
+ * (más recientes primero).
+ */
+export function partitionByPlayed<T extends { status: string; kickoffAt: Date }>(
+  matches: T[],
+  now: number = Date.now(),
+): { upcoming: T[]; past: T[] } {
+  const upcoming: T[] = [];
+  const past: T[] = [];
+  for (const m of matches) {
+    const isLive = m.status === "LIVE";
+    const isUpcoming = m.status !== "FINISHED" && m.kickoffAt.getTime() > now;
+    if (isLive || isUpcoming) upcoming.push(m);
+    else past.push(m);
+  }
+  past.reverse();
+  return { upcoming, past };
+}

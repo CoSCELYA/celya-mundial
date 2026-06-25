@@ -3,8 +3,8 @@ import type { Match, Prediction, QuestionAnswer, Team } from "@prisma/client";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { getScoringConfig } from "@/lib/scoring";
-import { isPredictionOpen } from "@/lib/dates";
-import { PHASE_ORDER, PHASE_LABEL } from "@/lib/constants";
+import { isPredictionOpen, partitionByPlayed } from "@/lib/dates";
+import { PHASE_LABEL } from "@/lib/constants";
 import {
   CalendarDays,
   Lock,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Flag } from "@/components/flag";
 import { LocalTime } from "@/components/local-time";
+import { MatchAccordion } from "./_components/match-accordion";
 
 type MatchWithTeams = Match & {
   homeTeam: Team | null;
@@ -58,13 +59,20 @@ export default async function PartidosPage() {
   const predByMatch = new Map<number, Prediction>();
   for (const p of predictions) predByMatch.set(p.matchId, p);
 
-  // Agrupar partidos por fase, respetando el orden oficial.
-  const byPhase = new Map<string, MatchWithTeams[]>();
-  for (const phase of PHASE_ORDER) byPhase.set(phase, []);
-  for (const m of matches) byPhase.get(m.phase)?.push(m);
+  // Separar próximos/en juego de los ya jugados, para poder plegar el pasado.
+  const { upcoming, past } = partitionByPlayed(matches);
+
+  const renderCard = (m: MatchWithTeams) => (
+    <MatchCard
+      key={m.id}
+      match={m}
+      prediction={predByMatch.get(m.id) ?? null}
+      open={isPredictionOpen(m.kickoffAt, cfg.lockMinutes)}
+    />
+  );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
           Pronóstico de partidos
@@ -79,27 +87,23 @@ export default async function PartidosPage() {
           Todavía no hay partidos programados.
         </div>
       ) : (
-        PHASE_ORDER.map((phase) => {
-          const list = byPhase.get(phase) ?? [];
-          if (list.length === 0) return null;
-          return (
-            <section key={phase} className="space-y-3">
-              <h2 className="text-[11px] font-semibold uppercase tracking-wide text-white/60">
-                {PHASE_LABEL[phase]}
-              </h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {list.map((m) => (
-                  <MatchCard
-                    key={m.id}
-                    match={m}
-                    prediction={predByMatch.get(m.id) ?? null}
-                    open={isPredictionOpen(m.kickoffAt, cfg.lockMinutes)}
-                  />
-                ))}
-              </div>
-            </section>
-          );
-        })
+        <>
+          <MatchAccordion title="En juego y próximos" count={upcoming.length} defaultOpen>
+            {upcoming.length > 0 ? (
+              upcoming.map(renderCard)
+            ) : (
+              <p className="col-span-full rounded-xl border border-white/10 bg-white/5 px-4 py-8 text-center text-sm text-white/60 backdrop-blur">
+                No hay partidos próximos por ahora.
+              </p>
+            )}
+          </MatchAccordion>
+
+          {past.length > 0 && (
+            <MatchAccordion title="Partidos jugados" count={past.length}>
+              {past.map(renderCard)}
+            </MatchAccordion>
+          )}
+        </>
       )}
     </div>
   );
