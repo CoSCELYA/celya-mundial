@@ -111,22 +111,6 @@ async function getCurrentSyncTarget(now: Date = new Date()) {
   });
 }
 
-/**
- * Todos los partidos activos en este momento: en juego (LIVE) o dentro de la
- * ventana de sincronización. Sirve para detectar partidos simultáneos, que el
- * sync por-partido no podría cubrir (solo atiende uno por corrida).
- */
-async function countActiveSyncTargets(now: Date = new Date()): Promise<number> {
-  const from = new Date(now.getTime() - ACTIVE_TAIL_MS);
-  const to = new Date(now.getTime() + ACTIVE_LEAD_MS);
-  return prisma.match.count({
-    where: {
-      status: { not: "FINISHED" },
-      OR: [{ status: "LIVE" }, { kickoffAt: { gte: from, lte: to } }],
-    },
-  });
-}
-
 function normalize(s: string): string {
   return s
     .toLowerCase()
@@ -624,14 +608,6 @@ export async function syncCurrentWorldCupMatch(now: Date = new Date()): Promise<
   const token = process.env.FOOTBALL_DATA_TOKEN;
   if (!token) {
     return withClosedTrivia(emptyResult(false, "FOOTBALL_DATA_TOKEN no esta configurado."), now);
-  }
-
-  // Si hay varios partidos activos a la vez (p. ej. dos a la misma hora), el
-  // sync por-partido solo cubriría uno y dejaría el otro atascado en LIVE. En
-  // ese caso hacemos un sync completo (una sola llamada a la API) para
-  // actualizarlos todos.
-  if ((await countActiveSyncTargets(now)) > 1) {
-    return syncWorldCup();
   }
 
   const resolveTeam = await createTeamResolver();
