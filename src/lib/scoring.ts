@@ -28,9 +28,10 @@ function outcome(home: number, away: number): number {
 }
 
 /**
- * Reasigna el desempate aleatorio de todos los usuarios. Se llama tras cada
- * recálculo de puntos para que los empates en la tabla se rebarajen al cerrar
- * partidos, en lugar de quedar fijos por orden alfabético.
+ * Reasigna el desempate aleatorio de todos los usuarios. Se llama UNA vez por
+ * evento de recálculo (carga de resultado en admin, o un sync que aplicó un
+ * marcador), no por cada partido, para que los empates se rebarajen al cerrar
+ * partidos sin penalizar el rendimiento del sync completo.
  */
 export async function reshuffleTiebreakers(): Promise<void> {
   await prisma.$executeRaw`UPDATE "User" SET "tiebreaker" = random()`;
@@ -99,7 +100,6 @@ export async function recomputeTriviaPoints(matchId: number): Promise<RecomputeM
     { maxWait: 20_000, timeout: 20_000 },
   );
 
-  await reshuffleTiebreakers();
   return result;
 }
 
@@ -222,7 +222,6 @@ export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMa
     { maxWait: 20_000, timeout: 20_000 },
   );
 
-  await reshuffleTiebreakers();
   return result;
 }
 
@@ -284,8 +283,6 @@ export async function recomputeChampionPoints(): Promise<void> {
       }
     }
   });
-
-  await reshuffleTiebreakers();
 }
 
 /** Whether the champion/runner-up pick is still editable (before lock phase begins). */

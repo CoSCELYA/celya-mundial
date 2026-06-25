@@ -5,7 +5,12 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { requireAdmin, requireSuperAdmin } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
-import { recomputeMatchPoints, recomputeChampionPoints, getScoringConfig } from "@/lib/scoring";
+import {
+  recomputeMatchPoints,
+  recomputeChampionPoints,
+  reshuffleTiebreakers,
+  getScoringConfig,
+} from "@/lib/scoring";
 import { isPredictionOpen } from "@/lib/dates";
 import { syncCurrentWorldCupMatch } from "@/lib/football-data";
 import {
@@ -328,6 +333,8 @@ export async function setMatchResult(_prev: ActionState, fd: FormData): Promise<
   if (match.phase === "FINAL") {
     await recomputeChampionPoints();
   }
+  // Rebaraja el desempate aleatorio una vez tras recalcular los puntos.
+  await reshuffleTiebreakers();
 
   revalidateAdmin(["/admin/partidos", "/admin/tabla", "/admin", "/partidos", "/tabla"]);
   return { success: "Resultado guardado correctamente." };

@@ -5,6 +5,7 @@ import {
   recomputeMatchPoints,
   recomputeChampionPoints,
   recomputeClosedTriviaPoints,
+  reshuffleTiebreakers,
   type RecomputeMatchPointsResult,
 } from "@/lib/scoring";
 
@@ -223,6 +224,13 @@ async function withClosedTrivia(
   now: Date,
   excludeMatchIds: number[] = [],
 ): Promise<SyncResult> {
+  // Rebaraja el desempate aleatorio una sola vez por sync, solo cuando se aplicó
+  // un marcador (se recalcularon puntos). En crons inactivos no se toca, así la
+  // tabla queda estable entre partidos.
+  if (result.scoresUpdated > 0) {
+    await reshuffleTiebreakers();
+  }
+
   const trivia = await recomputeClosedTriviaPoints(now, excludeMatchIds);
   if (
     trivia.matchesChecked === 0 &&
