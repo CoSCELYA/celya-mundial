@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db";
 import { getScoringConfig } from "@/lib/scoring";
-import type { PointsType } from "@prisma/client";
+import type { MatchStatus, Phase, PointsType } from "@prisma/client";
 
 /** Desglose de cómo se ganaron los puntos, por categoría. */
 export type PointsBreakdown = Record<PointsType, { count: number; points: number }>;
@@ -120,6 +120,75 @@ export async function getUserSummary(userId: number) {
     totalPlayers: standings.length,
     entries,
   };
+}
+
+export type MatchPredictionsRow = {
+  matchId: number;
+  phase: Phase;
+  groupName: string | null;
+  kickoffAt: Date;
+  status: MatchStatus;
+  homeName: string;
+  homeCode: string | null;
+  awayName: string;
+  awayCode: string | null;
+  homeScore: number | null;
+  awayScore: number | null;
+  predictions: {
+    userId: number;
+    fullName: string;
+    homeScore: number;
+    awayScore: number;
+    pointsAwarded: number | null;
+  }[];
+};
+
+/**
+ * Pronósticos de todos los jugadores para los partidos ya iniciados (kickoff en
+ * el pasado). Solo se incluyen partidos cuyo pronóstico ya está cerrado, así no
+ * se filtran marcadores de partidos futuros.
+ */
+export async function getPlayedMatchPredictions(): Promise<MatchPredictionsRow[]> {
+  const now = new Date();
+  const matches = await prisma.match.findMany({
+    where: { kickoffAt: { lte: now } },
+    orderBy: [{ kickoffAt: "desc" }, { id: "desc" }],
+    include: {
+      homeTeam: true,
+      awayTeam: true,
+      predictions: {
+        include: { user: { select: { fullName: true, role: true } } },
+      },
+    },
+  });
+
+  return matches.map((m) => ({
+    matchId: m.id,
+    phase: m.phase,
+    groupName: m.groupName,
+    kickoffAt: m.kickoffAt,
+    status: m.status,
+    homeName: m.homeTeam?.name ?? m.label ?? "Por definir",
+    homeCode: m.homeTeam?.fifaCode ?? null,
+    awayName: m.awayTeam?.name ?? "Por definir",
+    awayCode: m.awayTeam?.fifaCode ?? null,
+    homeScore: m.homeScore,
+    awayScore: m.awayScore,
+    predictions: m.predictions
+      .filter((p) => p.user.role === "EMPLEADO")
+      .map((p) => ({
+        userId: p.userId,
+        fullName: p.user.fullName,
+        homeScore: p.homeScore,
+        awayScore: p.awayScore,
+        pointsAwarded: p.pointsAwarded,
+      }))
+      .sort(
+        (a, b) =>
+          (b.pointsAwarded ?? -1) - (a.pointsAwarded ?? -1) ||
+          a.fullName.localeCompare(b.fullName),
+      ),
+  }));
 }
 
 /** The user's champion / runner-up pick with team details. */
