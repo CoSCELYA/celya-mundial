@@ -22,7 +22,10 @@ export default async function PlayerHomePage() {
   const openMatches = await prisma.match.findMany({
     where: {
       kickoffAt: { gt: predictionCutoff },
-      question: { is: { status: "ACTIVE" } },
+      homeTeamId: { not: null },
+      awayTeamId: { not: null },
+      // Eliminatorias: solo marcador. Grupos: requieren pregunta activa.
+      OR: [{ phase: { not: "GROUP" } }, { question: { is: { status: "ACTIVE" } } }],
       predictions: { none: { userId: s.userId } },
     },
     include: { homeTeam: true, awayTeam: true, question: { select: { status: true } } },

@@ -32,7 +32,9 @@ export async function answerTrivia(_prev: ActionState, fd: FormData): Promise<Ac
     where: { matchId },
     include: { match: true },
   });
-  if (!question) return { error: "Este partido no tiene pregunta de trivia." };
+  if (!question || question.match.phase !== "GROUP") {
+    return { error: "Este partido no tiene pregunta de trivia." };
+  }
   if (question.status !== "ACTIVE") return { error: "La pregunta no está disponible." };
 
   const cfg = await getScoringConfig();
@@ -87,18 +89,21 @@ export async function savePrediction(_prev: ActionState, fd: FormData): Promise<
     include: { question: true },
   });
   if (!match) return { error: "El partido no existe." };
-  if (!match.question) return { error: "Este partido no tiene pregunta de trivia." };
-  if (match.question.status !== "ACTIVE") {
-    return {
-      error:
-        "La pregunta de este partido está deshabilitada por el momento. Aún no puedes registrar tu marcador.",
-    };
-  }
 
-  const answer = await prisma.questionAnswer.findUnique({
-    where: { userId_questionId: { userId: s.userId, questionId: match.question.id } },
-  });
-  if (!answer) return { error: "Primero responde la pregunta de trivia." };
+  // Las eliminatorias no tienen trivia: solo marcador. Solo en fase de grupos
+  // (con pregunta) se mantiene el requisito de responderla antes.
+  if (match.phase === "GROUP" && match.question) {
+    if (match.question.status !== "ACTIVE") {
+      return {
+        error:
+          "La pregunta de este partido está deshabilitada por el momento. Aún no puedes registrar tu marcador.",
+      };
+    }
+    const answer = await prisma.questionAnswer.findUnique({
+      where: { userId_questionId: { userId: s.userId, questionId: match.question.id } },
+    });
+    if (!answer) return { error: "Primero responde la pregunta de trivia." };
+  }
 
   const cfg = await getScoringConfig();
   if (!isPredictionOpen(match.kickoffAt, cfg.lockMinutes)) {

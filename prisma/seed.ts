@@ -127,6 +127,7 @@ async function main() {
   const groupStart = new Date("2026-06-11T17:00:00.000Z");
   let seq = 0;
   const matchIds: number[] = [];
+  const groupMatchIds: number[] = [];
 
   for (let g = 0; g < 12; g++) {
     const letter = GROUP_LETTERS[g];
@@ -147,6 +148,7 @@ async function main() {
         },
       });
       matchIds.push(m.id);
+      groupMatchIds.push(m.id);
       seq++;
     }
   }
@@ -182,9 +184,9 @@ async function main() {
   }
   console.log(`  ✔ 32 partidos de eliminatorias (equipos por definir)`);
 
-  // One trivia question per match (104 placeholders)
+  // Trivia solo en fase de grupos (las eliminatorias son solo marcador).
   let qn = 1;
-  for (const id of matchIds) {
+  for (const id of groupMatchIds) {
     await prisma.question.create({
       data: {
         matchId: id,
@@ -196,7 +198,7 @@ async function main() {
     });
     qn++;
   }
-  console.log(`  ✔ ${matchIds.length} preguntas de trivia (placeholder)`);
+  console.log(`  ✔ ${groupMatchIds.length} preguntas de trivia (solo grupos)`);
 
   // Scoring config
   await prisma.scoringConfig.upsert({

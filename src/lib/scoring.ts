@@ -61,9 +61,13 @@ async function recomputeTriviaPointsInTransaction(
 
   const question = await tx.question.findUnique({
     where: { matchId },
-    include: { answers: { where: { isCorrect: true } } },
+    include: {
+      match: { select: { phase: true } },
+      answers: { where: { isCorrect: true } },
+    },
   });
-  if (question?.status !== "ACTIVE") {
+  // Solo la fase de grupos tiene trivia; las eliminatorias son solo marcador.
+  if (question?.status !== "ACTIVE" || question.match.phase !== "GROUP") {
     return { pointsEntriesCreated: 0, totalPointsCreated: 0 };
   }
 
@@ -117,6 +121,7 @@ export async function recomputeClosedTriviaPoints(
   // hay que recalcularlo. Esto evita reprocesar miles de entradas en cada cron.
   const matches = await prisma.match.findMany({
     where: {
+      phase: "GROUP",
       kickoffAt: { lte: closedDeadlineThreshold },
       question: { is: { status: "ACTIVE" } },
       pointsLog: { none: { type: "TRIVIA" } },

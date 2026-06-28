@@ -120,10 +120,11 @@ function MatchCard({
 }) {
   const finished = match.status === "FINISHED";
   const hasRealScore = match.homeScore !== null && match.awayScore !== null;
-  const predictionAvailable = open && match.question?.status === "ACTIVE";
+  // Eliminatorias: solo marcador, sin trivia (se ignora cualquier pregunta).
+  const q = match.phase === "GROUP" ? match.question : null;
+  const predictionAvailable = open && (!q || q.status === "ACTIVE");
   const unavailable = open && !predictionAvailable;
-  const triviaSummaryQuestion =
-    !open && match.question?.status === "ACTIVE" ? match.question : null;
+  const triviaSummaryQuestion = !open && q?.status === "ACTIVE" ? q : null;
 
   const tag =
     match.phase === "GROUP" && match.groupName

@@ -46,7 +46,8 @@ export default async function PartidoDetallePage({
   const hasRealScore = match.homeScore !== null && match.awayScore !== null;
 
   const prediction = match.predictions[0] ?? null;
-  const question = match.question;
+  // Las eliminatorias son solo marcador: se ignora cualquier pregunta de trivia.
+  const question = match.phase === "GROUP" ? match.question : null;
   const activeQuestion = question?.status === "ACTIVE" ? question : null;
   const questionDisabled = question?.status === "INACTIVE";
   const triviaAnswer = question?.answers[0] ?? null;
@@ -137,16 +138,17 @@ export default async function PartidoDetallePage({
           La pregunta de este partido está deshabilitada por el momento. Aún no puedes
           responder la trivia ni registrar tu marcador.
         </InfoBox>
-      ) : !question ? (
-        <InfoBox>Este partido todavía no tiene una pregunta de trivia disponible.</InfoBox>
-      ) : !activeTriviaAnswer ? (
-        <TriviaForm matchId={match.id} text={activeQuestion!.text} options={activeQuestion!.options} />
+      ) : activeQuestion && !activeTriviaAnswer ? (
+        <TriviaForm matchId={match.id} text={activeQuestion.text} options={activeQuestion.options} />
       ) : (
+        // Eliminatorias (sin pregunta) o grupos con trivia ya respondida: marcador.
         <div className="space-y-4">
-          <div className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-            <CheckCircle2 className="size-4 shrink-0" />
-            Ya respondiste la trivia de este partido.
-          </div>
+          {activeQuestion && activeTriviaAnswer && (
+            <div className="flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
+              <CheckCircle2 className="size-4 shrink-0" />
+              Ya respondiste la trivia de este partido.
+            </div>
+          )}
           <ScoreForm
             matchId={match.id}
             homeName={homeName}
