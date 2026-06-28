@@ -1031,6 +1031,10 @@ async function applyUpdate(
 
   const hasScore = homeScore !== null && awayScore !== null;
   const hadScore = target.homeScore !== null && target.awayScore !== null;
+  // Solo recalcular puntos si el marcador realmente cambió: evita reprocesar
+  // todos los partidos finalizados en cada sync (causa del timeout).
+  const scoreChanged =
+    homeScore !== target.homeScore || awayScore !== target.awayScore;
 
   const data: {
     externalId?: number;
@@ -1042,7 +1046,7 @@ async function applyUpdate(
     status,
     kickoffAt: new Date(am.utcDate),
   };
-  if (await canAssignExternalId(target.id, am.id)) {
+  if (target.externalId !== am.id && (await canAssignExternalId(target.id, am.id))) {
     data.externalId = am.id;
   }
   if (hasScore) {
@@ -1053,7 +1057,7 @@ async function applyUpdate(
   await prisma.match.update({ where: { id: target.id }, data });
   return {
     hasScore,
-    shouldRecompute: hasScore || hadScore,
+    shouldRecompute: scoreChanged && (hasScore || hadScore),
     finished: status === "FINISHED" && hasScore,
     teamsKnown: true,
     assigned: 0,
@@ -1090,7 +1094,7 @@ async function applyKnockoutUpdate(
     awayScore?: number | null;
     winnerTeamId?: number | null;
   } = { kickoffAt: new Date(am.utcDate) };
-  if (await canAssignExternalId(target.id, am.id)) {
+  if (target.externalId !== am.id && (await canAssignExternalId(target.id, am.id))) {
     data.externalId = am.id;
   }
   if (homeId) data.homeTeamId = homeId;
@@ -1111,10 +1115,14 @@ async function applyKnockoutUpdate(
     data.status = status === "FINISHED" ? "SCHEDULED" : status;
   }
 
+  // Solo recalcular si el marcador cambió de verdad (evita reprocesar todo).
+  const scoreChanged =
+    hasScore && (rawHome !== target.homeScore || rawAway !== target.awayScore);
+
   await prisma.match.update({ where: { id: target.id }, data });
   return {
     hasScore,
-    shouldRecompute: hasScore || (teamsKnown && hadScore),
+    shouldRecompute: scoreChanged && (hasScore || (teamsKnown && hadScore)),
     finished,
     teamsKnown,
     assigned,

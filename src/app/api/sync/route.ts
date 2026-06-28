@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { syncCurrentWorldCupMatch, syncWorldCup } from "@/lib/football-data";
+import { syncWorldCup } from "@/lib/football-data";
 
 export const dynamic = "force-dynamic";
 
 // Endpoint para sincronizacion programada (cron cada 15 min).
 // Proteccion: cabecera Authorization: Bearer <CRON_SECRET> o ?key=<CRON_SECRET>.
-// Por defecto solo consulta la API para el partido actual.
-// Usa ?force=1 para forzar una sincronizacion completa.
+// Hace una sincronizacion completa (una sola llamada a la API): asigna equipos
+// y fechas de eliminatorias, actualiza marcadores y recalcula solo lo que
+// cambio. Es rapida porque no reprocesa partidos cuyo marcador no cambio.
 async function handle(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   // Falla cerrado: sin secreto configurado el endpoint no se expone.
@@ -23,10 +24,8 @@ async function handle(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "No autorizado" }, { status: 401 });
   }
 
-  const force = req.nextUrl.searchParams.get("force") === "1";
-  const result = force ? await syncWorldCup() : await syncCurrentWorldCupMatch();
+  const result = await syncWorldCup();
   console.info("[sync]", {
-    force,
     ok: result.ok,
     message: result.message,
     fetched: result.fetched,
