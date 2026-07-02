@@ -1,7 +1,15 @@
 import { requireSession } from "@/lib/auth";
 import { getScoringConfig } from "@/lib/scoring";
 import { PHASE_LABEL } from "@/lib/constants";
-import { BookOpen, ClipboardList, Crown, HandHeart, ListOrdered, Target } from "lucide-react";
+import {
+  BookOpen,
+  ClipboardList,
+  Crown,
+  HandHeart,
+  ListOrdered,
+  Swords,
+  Target,
+} from "lucide-react";
 
 function lockLabel(minutes: number): string {
   if (minutes <= 0) return "el inicio del partido";
@@ -35,8 +43,10 @@ export default async function ReglasPage() {
         <Section icon={<ClipboardList className="size-5 text-accent" />} title="Cómo jugar">
           <ol className="list-decimal space-y-2 pl-5 text-sm leading-relaxed text-white/80 marker:text-accent marker:font-semibold">
             <li>
-              Antes de cada partido, responde la pregunta de trivia. Es obligatorio responderla
-              para poder registrar tu marcador.
+              En la <strong className="text-white">fase de grupos</strong>, antes de cada partido
+              responde la pregunta de trivia (obligatoria para registrar tu marcador). En las{" "}
+              <strong className="text-white">eliminatorias</strong> no hay trivia: registras solo el
+              marcador.
             </li>
             <li>
               Registra tu marcador del partido (goles del local y del visitante) hasta{" "}
@@ -62,6 +72,36 @@ export default async function ReglasPage() {
             El marcador exacto y el resultado acertado no se suman entre sí: cada partido otorga el
             mayor de los dos.
           </p>
+        </Section>
+
+        <Section
+          icon={<Swords className="size-5 text-accent" />}
+          title="Puntaje en eliminatorias (desde octavos)"
+        >
+          <p className="text-sm leading-relaxed text-white/80">
+            Desde <strong className="text-white">octavos de final</strong> ya no necesitas acertar el
+            resultado exacto para sumar: lo importante es acertar{" "}
+            <strong className="text-white">quién clasifica</strong>.
+          </p>
+          <ul className="mt-3 space-y-2 text-sm text-white/80">
+            <ScoreRow label="Marcador exacto de los 90'/prórroga" points={cfg.exactPts} />
+            <ScoreRow label="Acertar quién clasifica" points={cfg.resultPts} />
+          </ul>
+          <ul className="mt-4 list-disc space-y-1.5 pl-5 text-xs leading-relaxed text-white/50">
+            <li>
+              Tu equipo que clasifica es el que pusiste con más goles. Si aciertas quién avanza —
+              aunque el partido se defina por penales— ganas los puntos.
+            </li>
+            <li>
+              Los penales no cuentan para el marcador: solo definen quién avanza. El marcador exacto
+              se refiere a los 90 minutos (o la prórroga).
+            </li>
+            <li>Si pronosticas un empate, solo sumas acertando el marcador exacto.</li>
+            <li>
+              Los <strong className="text-white/70">dieciseisavos</strong> mantienen el puntaje por
+              resultado (ganador/empate), porque esa ronda ya había comenzado.
+            </li>
+          </ul>
         </Section>
 
         <Section

@@ -1,6 +1,16 @@
 import "server-only";
 import { prisma } from "@/lib/db";
-import type { Prisma, ScoringConfig } from "@prisma/client";
+import type { Phase, Prisma, ScoringConfig } from "@prisma/client";
+
+// Fases de eliminación puntuadas por "clasificación" (acertar quién avanza) en
+// vez del resultado 1X2. Los dieciseisavos (R32) quedan con el esquema de grupos
+// porque ya empezaron cuando se hizo el cambio.
+const ADVANCER_SCORED_PHASES: Phase[] = ["R16", "QF", "SF", "THIRD", "FINAL"];
+
+/** Si la fase se puntúa por clasificado (octavos en adelante). */
+export function isAdvancerScored(phase: Phase): boolean {
+  return ADVANCER_SCORED_PHASES.includes(phase);
+}
 
 export type RecomputeMatchPointsResult = {
   hasScore: boolean;
@@ -37,15 +47,59 @@ export async function reshuffleTiebreakers(): Promise<void> {
   await prisma.$executeRaw`UPDATE "User" SET "tiebreaker" = random()`;
 }
 
+/**
+ * Contexto de eliminatoria para puntuar por clasificado (octavos en adelante).
+ * `winnerTeamId` es el equipo que avanza (definido por penales si hubo empate).
+ */
+type AdvancerContext = {
+  advancerScored: boolean;
+  homeTeamId: number | null;
+  awayTeamId: number | null;
+  winnerTeamId: number | null;
+};
+
+/** Equipo con más goles en un marcador; null si es empate. */
+function higherTeam(
+  home: number,
+  away: number,
+  homeTeamId: number | null,
+  awayTeamId: number | null,
+): number | null {
+  if (home > away) return homeTeamId;
+  if (away > home) return awayTeamId;
+  return null;
+}
+
 /** Points for a single prediction vs the current official score. */
 export function predictionPoints(
   pred: { homeScore: number; awayScore: number },
   real: { homeScore: number; awayScore: number },
   cfg: Pick<ScoringConfig, "exactPts" | "resultPts">,
+  ctx?: AdvancerContext,
 ): { points: number; type: "EXACT" | "RESULT" | null } {
+  // El marcador exacto (90'/prórroga) siempre otorga el máximo, en toda fase.
   if (pred.homeScore === real.homeScore && pred.awayScore === real.awayScore) {
     return { points: cfg.exactPts, type: "EXACT" };
   }
+
+  // Eliminatorias R16+: se premia acertar quién clasifica, no el 1X2.
+  if (ctx?.advancerScored) {
+    const predAdvancer = higherTeam(
+      pred.homeScore,
+      pred.awayScore,
+      ctx.homeTeamId,
+      ctx.awayTeamId,
+    );
+    const actualAdvancer =
+      ctx.winnerTeamId ??
+      higherTeam(real.homeScore, real.awayScore, ctx.homeTeamId, ctx.awayTeamId);
+    if (predAdvancer !== null && actualAdvancer !== null && predAdvancer === actualAdvancer) {
+      return { points: cfg.resultPts, type: "RESULT" };
+    }
+    return { points: 0, type: null };
+  }
+
+  // Grupos y dieciseisavos: resultado 1X2 (sin cambios).
   if (outcome(pred.homeScore, pred.awayScore) === outcome(real.homeScore, real.awayScore)) {
     return { points: cfg.resultPts, type: "RESULT" };
   }
@@ -203,11 +257,17 @@ export async function recomputeMatchPoints(matchId: number): Promise<RecomputeMa
       }
 
       const real = { homeScore: match.homeScore!, awayScore: match.awayScore! };
+      const advancerCtx: AdvancerContext = {
+        advancerScored: isAdvancerScored(match.phase),
+        homeTeamId: match.homeTeamId,
+        awayTeamId: match.awayTeamId,
+        winnerTeamId: match.winnerTeamId,
+      };
       let pointsEntriesCreated = 0;
       let totalPointsCreated = 0;
 
       for (const pred of match.predictions) {
-        const { points, type } = predictionPoints(pred, real, cfg);
+        const { points, type } = predictionPoints(pred, real, cfg, advancerCtx);
         await tx.prediction.update({
           where: { id: pred.id },
           data: { pointsAwarded: points, scoredAt: new Date() },

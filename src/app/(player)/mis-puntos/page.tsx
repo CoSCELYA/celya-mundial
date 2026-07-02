@@ -1,5 +1,6 @@
 import { requireSession } from "@/lib/auth";
 import { getUserSummary } from "@/lib/queries";
+import { isAdvancerScored } from "@/lib/scoring";
 import { Flag } from "@/components/flag";
 import { LocalTime } from "@/components/local-time";
 import type { PointsType } from "@prisma/client";
@@ -19,6 +20,14 @@ const TYPE_LABEL: Record<PointsType, string> = {
 type SummaryEntry = Awaited<
   ReturnType<typeof getUserSummary>
 >["entries"][number];
+
+/** En eliminatorias (octavos+) el punto de "resultado" es por clasificar. */
+function entryLabel(entry: SummaryEntry): string {
+  if (entry.type === "RESULT" && entry.match && isAdvancerScored(entry.match.phase)) {
+    return "Clasificado acertado";
+  }
+  return TYPE_LABEL[entry.type];
+}
 
 function ResumenCard({
   label,
@@ -129,7 +138,7 @@ export default async function MisPuntosPage() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-white">
-                      {TYPE_LABEL[entry.type]}
+                      {entryLabel(entry)}
                     </p>
                     <div className="mt-1 truncate text-sm">
                       <MatchLabel entry={entry} />
